@@ -9,73 +9,93 @@
 #include "strtab.h"
 #include "tokenize.h"
 #include <lacc/context.h>
-#include <lacc/deque.h>
 
 #include <assert.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
-/*
- * Buffer of preprocessed tokens, ready to be consumed by the parser.
- * Filled lazily on calls to peek(0), peekn(1) and next(0).
- */
-static deque_of(struct token) lookahead;
-
-/* Toggle for producing preprocessed output (-E). */
-static int output_preprocessed;
-
-/* Line currently being tokenized. */
-static char *line_buffer;
-
-INTERNAL void preprocess_reset(void)
+static int is_directive(const char *line)
 {
-    line_buffer = NULL;
-    macro_reset();
-    strtab_reset();
-    tokenize_reset();
-    deque_empty(&lookahead);
-}
-
-INTERNAL void preprocess_finalize(void)
-{
-    preprocess_reset();
-    input_finalize();
-    macro_finalize();
-    deque_destroy(&lookahead);
-}
-
-static struct token get_token(void)
-{
-    struct token r;
-    char *endptr;
-
-    if (!line_buffer && (line_buffer = getprepline()) == NULL) {
-        r = basic_token[END];
-    } else {
-        r = tokenize(line_buffer, (const char **) &endptr);
-        line_buffer = endptr;
-        if (r.token == END) {
-            /*
-             * Newlines are removed by getprepline, and never present in
-             * the input data. Instead intercept end of string, which
-             * represents end of line.
-             */
-            line_buffer = NULL;
-            r = basic_token[NEWLINE];
-        }
+    while (*line == ' ' || *line == '\t') {
+        line++;
     }
 
-    return r;
+    return *line == '#';
 }
 
-static enum token_type read_through_newline(TokenArray *line)
+static struct token get_token(struct preprocessor *prep)
 {
     struct token t;
 
-    t = get_token();
+    if (!prep->line) {
+        do {
+            prep->line = getprepline(prep->input);
+            if (!prep->line) {
+                return basic_token[END];
+            }
+
+        } while (!in_active_block(prep) && !is_directive(prep->line));
+    }
+
+    t = tokenize(prep, prep->line, &prep->line);
+    if (t.token == END) {
+        /*
+         * Newlines are removed by getprepline, and never present in
+         * the input data. Instead intercept end of string, which
+         * represents end of line.
+         */
+        t = basic_token[NEWLINE];
+        prep->line = NULL;
+    }
+
+    return t;
+}
+
+INTERNAL void preprocess_init(struct preprocessor *prep, struct input *input)
+{
+    prep->input = input;
+    prep->line = NULL;
+
+    macro_init(&prep->macros);
+    strtab_init(&prep->strtab);
+    deque_empty(&prep->lookahead);
+    register_builtin_definitions(prep, context.standard);
+}
+
+INTERNAL void preprocess_finalize(struct preprocessor *prep)
+{
+    int i;
+    TokenArray list;
+    ExpandStack stack;
+
+    strtab_destroy(&prep->strtab);
+    deque_destroy(&prep->lookahead);
+    hash_destroy(&prep->macros);
+
+    for (i = 0; i < array_len(&prep->arrays); ++i) {
+        list = array_get(&prep->arrays, i);
+        array_clear(&list);
+    }
+
+    for (i = 0; i < array_len(&prep->stacks); ++i) {
+        stack = array_get(&prep->stacks, i);
+        array_clear(&stack);
+    }
+
+    array_clear(&prep->arrays);
+    array_clear(&prep->stacks);
+}
+
+static enum token_type read_through_newline(
+    struct preprocessor *prep,
+    TokenArray *line)
+{
+    struct token t;
+
+    t = get_token(prep);
     while (t.token == NEWLINE) {
-        t = get_token();
+        t = get_token(prep);
     }
 
     if (t.token != END) {
@@ -89,25 +109,25 @@ static enum token_type read_through_newline(TokenArray *line)
  * _Pragma invocations differ slighly from macro expansions, in that the
  * opening parenthesis can start on a newline.
  */
-static void read_Pragma_invocation(TokenArray *line)
+static void read_Pragma_invocation(struct preprocessor *prep, TokenArray *line)
 {
     enum token_type t;
 
-    t = read_through_newline(line);
+    t = read_through_newline(prep, line);
     if (t != '(') {
-        error("Expected '(' after _Pragma.");
+        error(prep, "Expected '(' after _Pragma.");
         exit(1);
     }
 
-    t = read_through_newline(line);
+    t = read_through_newline(prep, line);
     if (t != STRING && t != PREP_STRING) {
-        error("Invalid argument to _Pragma operator, expected string.");
+        error(prep, "Invalid argument to _Pragma operator, expected string.");
         exit(1);
     }
 
-    t = read_through_newline(line);
+    t = read_through_newline(prep, line);
     if (t != ')') {
-        error("Expected ')' to complete _Pragma expression.");
+        error(prep, "Expected ')' to complete _Pragma expression.");
         exit(1);
     }
 }
@@ -118,13 +138,16 @@ static void read_Pragma_invocation(TokenArray *line)
  * makes the expression balanced. Read lines until full macro invocation
  * is included.
  */
-static void read_macro_invocation(TokenArray *line, const struct macro *macro)
+static void read_macro_invocation(
+    struct preprocessor *prep,
+    TokenArray *line,
+    const struct macro *macro)
 {
     int nesting;
     struct token t;
     assert(macro->type == FUNCTION_LIKE);
 
-    t = get_token();
+    t = get_token(prep);
     array_push_back(line, t);
     if (t.token != '(')
         /*
@@ -135,7 +158,7 @@ static void read_macro_invocation(TokenArray *line, const struct macro *macro)
 
     nesting = 1;
     while (nesting) {
-        t = get_token();
+        t = get_token(prep);
         if (t.token == '(') {
             nesting++;
         }
@@ -156,39 +179,41 @@ static void read_macro_invocation(TokenArray *line, const struct macro *macro)
     }
 
     if (nesting) {
-        error("Unbalanced invocation of macro '%s'.", str_raw(macro->name));
+        error(prep,
+            "Unbalanced invocation of macro '%s'.",
+            str_raw(macro->name));
         exit(1);
     }
 }
 
 /* Replace 'defined name' and 'defined (name)' with 0 or 1 constants. */
-static void read_defined_operator(TokenArray *line)
+static void read_defined_operator(struct preprocessor *prep, TokenArray *line)
 {
     int is_parens = 0;
     const char *endptr;
-    struct token t = get_token();
+    struct token t = get_token(prep);
 
     if (t.token == '(') {
-        t = get_token();
+        t = get_token(prep);
         is_parens = 1;
     }
 
     if (!t.is_expandable) {
-        error("Expected identifier in 'defined' clause, but got '%s'",
+        error(prep, "Expected identifier in 'defined' clause, but got '%s'",
             str_raw(t.d.string));
         exit(1);
     }
 
-    if (macro_definition(t.d.string))
-        t = tokenize("1", &endptr);
+    if (macro_definition(prep, t.d.string))
+        t = tokenize(prep, "1", &endptr);
     else
-        t = tokenize("0", &endptr);
+        t = tokenize(prep, "0", &endptr);
 
     array_push_back(line, t);
     if (is_parens) {
-        t = get_token();
+        t = get_token(prep);
         if (t.token != ')') {
-            error("Expected ')' to close 'defined' clause.");
+            error(prep, "Expected ')' to close 'defined' clause.");
             exit(1);
         }
     }
@@ -198,7 +223,10 @@ static void read_defined_operator(TokenArray *line)
  * Get token at position i of existing line, or add new token from input
  * stream to line at posistion. Overwrite the trailing newline.
  */
-static struct token skip_or_get_token(TokenArray *line, int i)
+static struct token skip_or_get_token(
+    struct preprocessor *prep,
+    TokenArray *line,
+    int i)
 {
     struct token t;
 
@@ -211,7 +239,7 @@ static struct token skip_or_get_token(TokenArray *line, int i)
 
     if (i == array_len(line)) {
         do {
-            t = get_token();
+            t = get_token(prep);
         } while (t.token == NEWLINE);
         assert(t.token != END);
         array_push_back(line, t);
@@ -229,19 +257,22 @@ static struct token skip_or_get_token(TokenArray *line, int i)
  * expansions. Read more input if the provided function-like macro at
  * posistion i does not have all parameters on the current line.
  */
-static int skip_or_read_expansion(TokenArray *line, int i)
+static int skip_or_read_expansion(
+    struct preprocessor *prep,
+    TokenArray *line,
+    int i)
 {
     int start = i, nest;
     struct token t;
 
-    t = skip_or_get_token(line, i++);
+    t = skip_or_get_token(prep, line, i++);
     if (t.token != '(') {
         return i - start;
     }
 
     nest = 1;
     while (nest) {
-        t = skip_or_get_token(line, i++);
+        t = skip_or_get_token(prep, line, i++);
         if (t.token == '(') nest++;
         if (t.token == ')') nest--;
     }
@@ -258,7 +289,11 @@ static int skip_or_read_expansion(TokenArray *line, int i)
  * line. Always ends with a newline (\n) token, but never contains any
  * newlines in the array itself.
  */
-static int read_complete_line(TokenArray *line, struct token t, int directive)
+static int read_complete_line(
+    struct preprocessor *prep,
+    TokenArray *line,
+    struct token t,
+    int directive)
 {
     int expandable = 1, macros = 0;
     const struct macro *def;
@@ -266,24 +301,24 @@ static int read_complete_line(TokenArray *line, struct token t, int directive)
     if (directive) {
         array_push_back(line, t);
         expandable = (t.token == IF) || !tok_cmp(t, ident__elif);
-        t = get_token();
+        t = get_token(prep);
     }
 
     while (t.token != NEWLINE) {
         assert(t.token != END);
         if (expandable && t.is_expandable) {
             if (directive && !tok_cmp(t, ident__defined)) {
-                read_defined_operator(line);
+                read_defined_operator(prep, line);
             } else if (!tok_cmp(t, ident__Pragma)) {
                 array_push_back(line, t);
-                read_Pragma_invocation(line);
+                read_Pragma_invocation(prep, line);
             } else {
-                def = macro_definition(t.d.string);
+                def = macro_definition(prep, t.d.string);
                 if (def) {
                     macros += 1;
                     if (def->type == FUNCTION_LIKE) {
                         array_push_back(line, t);
-                        read_macro_invocation(line, def);
+                        read_macro_invocation(prep, line, def);
                     } else {
                         array_push_back(line, t);
                     }
@@ -294,7 +329,7 @@ static int read_complete_line(TokenArray *line, struct token t, int directive)
         } else {
             array_push_back(line, t);
         }
-        t = get_token();
+        t = get_token(prep);
     }
 
     assert(t.token == NEWLINE);
@@ -312,7 +347,7 @@ static int read_complete_line(TokenArray *line, struct token t, int directive)
  * Return non-zero if there are more function-like macros that needs to
  * be expanded.
  */
-static int refill_expanding_line(TokenArray *line)
+static int refill_expanding_line(struct preprocessor *prep, TokenArray *line)
 {
     int i, n, len;
     struct token t;
@@ -326,20 +361,20 @@ static int refill_expanding_line(TokenArray *line)
     for (i = 0, n = 0; i < len; ++i) {
         t = array_get(line, i);
         if (t.is_expandable && !t.disable_expand) {
-            def = macro_definition(t.d.string);
+            def = macro_definition(prep, t.d.string);
             if (def && def->type == FUNCTION_LIKE) {
-                i += skip_or_read_expansion(line, i + 1);
+                i += skip_or_read_expansion(prep, line, i + 1);
                 n += 1;
             }
         } else if (!tok_cmp(t, ident__Pragma)) {
-            i += skip_or_read_expansion(line, i + 1);
+            i += skip_or_read_expansion(prep, line, i + 1);
         }
     }
 
     /* Make sure a complete line is read, to not mix directives. */
     if (t.token != NEWLINE) {
-        t = get_token();
-        n += read_complete_line(line, t, 0);
+        t = get_token(prep);
+        n += read_complete_line(prep, line, t, 0);
     }
 
     return n;
@@ -387,26 +422,29 @@ static const char *stringify_token(const struct token *t)
  * adjacent string literals, and conversion from preprocessing number to
  * proper numeric values.
  */
-static void add_to_lookahead(struct token t)
+static void add_to_lookahead(struct preprocessor *prep, struct token t)
 {
     struct token prev;
 
-    if (!output_preprocessed) {
+    if (context.target != TARGET_PREPROCESS) {
         switch (t.token) {
         case PREP_CHAR:
-            t = convert_preprocessing_char(t);
+            t = convert_preprocessing_char(prep, t);
             break;
         case PREP_NUMBER:
-            t = convert_preprocessing_number(t);
+            t = convert_preprocessing_number(prep, t);
             break;
         case PREP_STRING:
-            t = convert_preprocessing_string(t);
+            t = convert_preprocessing_string(prep, t);
         case STRING:
-            if (deque_len(&lookahead)) {
-                prev = deque_back(&lookahead);
+            if (deque_len(&prep->lookahead)) {
+                prev = deque_back(&prep->lookahead);
                 if (prev.token == STRING) {
-                    t.d.string = str_cat(prev.d.string, t.d.string);
-                    deque_back(&lookahead) = t;
+                    t.d.string = str_cat(
+                        &prep->strtab,
+                        prev.d.string,
+                        t.d.string);
+                    deque_back(&prep->lookahead) = t;
                     goto added;
                 }
             }
@@ -415,7 +453,7 @@ static void add_to_lookahead(struct token t)
         }
     }
 
-    deque_push_back(&lookahead, t);
+    deque_push_back(&prep->lookahead, t);
 
 added:
     if (context.verbose) {
@@ -429,18 +467,18 @@ added:
  * is the case if buffer is non-empty, and last element is STRING, which
  * can be followed by any number of NEWLINE.
  */
-static int is_lookahead_ready(int n)
+static int is_lookahead_ready(struct preprocessor *prep, int n)
 {
     unsigned len;
     struct token last;
 
-    len = deque_len(&lookahead);
+    len = deque_len(&prep->lookahead);
     if (len < n) {
         return 0;
     }
 
-    if (len > 0 && !output_preprocessed) {
-        last = deque_back(&lookahead);
+    if (len > 0 && context.target != TARGET_PREPROCESS) {
+        last = deque_back(&prep->lookahead);
         if (last.token == STRING) {
             return 0;
         }
@@ -449,37 +487,34 @@ static int is_lookahead_ready(int n)
     return 1;
 }
 
-static void preprocess_pragma(TokenArray *line)
+static void preprocess_pragma(struct preprocessor *prep, TokenArray *line)
 {
     int i;
     struct token t;
 
     assert(array_len(line) > 0);
     assert(!tok_cmp(ident__pragma, array_get(line, 0)));
-    if (output_preprocessed) {
-        add_to_lookahead(basic_token[NEWLINE]);
-        add_to_lookahead(basic_token['#']);
+    if (context.target == TARGET_PREPROCESS) {
+        add_to_lookahead(prep, basic_token[NEWLINE]);
+        add_to_lookahead(prep, basic_token['#']);
         for (i = 0; i < array_len(line); ++i) {
             t = array_get(line, i);
             assert(t.token != END);
-            add_to_lookahead(t);
+            add_to_lookahead(prep, t);
         }
         if (t.token != NEWLINE) {
-            add_to_lookahead(basic_token[NEWLINE]);
+            add_to_lookahead(prep, basic_token[NEWLINE]);
         }
     } else {
         /* Pragma directives are not yet handled. */
     }
 }
 
-static char *dstr_buffer;
-static size_t dstr_length;
-
 /*
  * Replace \" by ", and \\ by \, returning a new string that can be
  * tokenized.
  */
-static const char *destringize(String str)
+static const char *destringize(String str, struct strtab *strtab)
 {
     int i;
     char *ptr;
@@ -488,13 +523,13 @@ static const char *destringize(String str)
 
     len = str.len;
     raw = str_raw(str);
-    if (len + 1 > dstr_length) {
-        dstr_length = len + 1;
-        dstr_buffer = realloc(dstr_buffer, dstr_length);
-        memset(dstr_buffer, '\0', dstr_length);
+    if (len + 1 > strtab->catlen) {
+        strtab->catlen = len + 1;
+        strtab->catbuf = realloc(strtab->catbuf, strtab->catlen);
+        memset(strtab->catbuf, '\0', strtab->catlen);
     }
 
-    ptr = dstr_buffer;
+    ptr = strtab->catbuf;
     for (i = 0; i < len; ++i) {
         if (raw[i] == '\\') {
             switch (raw[i + 1]) {
@@ -511,10 +546,14 @@ static const char *destringize(String str)
         }
     }
 
-    return dstr_buffer;
+    return strtab->catbuf;
 }
 
-static int preprocess_Pragma(TokenArray *line, int i, TokenArray *pragma)
+static int preprocess_Pragma(
+    struct preprocessor *prep,
+    TokenArray *line,
+    int i,
+    TokenArray *pragma)
 {
     struct token t;
     const char *destr, *endptr;
@@ -528,15 +567,15 @@ static int preprocess_Pragma(TokenArray *line, int i, TokenArray *pragma)
             && array_get(line, i + 2).token != PREP_STRING)
         || array_get(line, i + 3).token != ')')
     {
-        error("Wrong application of _Pragma operator.");
+        error(prep, "Wrong application of _Pragma operator.");
         exit(1);
     }
 
     array_push_back(pragma, ident__pragma);
 
     t = array_get(line, i + 2);
-    destr = destringize(t.d.string);
-    while ((t = tokenize(destr, &endptr)).token != END) {
+    destr = destringize(t.d.string, &prep->strtab);
+    while ((t = tokenize(prep, destr, &endptr)).token != END) {
         array_push_back(pragma, t);
         destr = endptr;
     }
@@ -550,15 +589,16 @@ static int preprocess_Pragma(TokenArray *line, int i, TokenArray *pragma)
  * Fill up lookahead buffer to hold at least n tokens. In case of end of
  * input, put END tokens in remaining slots.
  */
-static void preprocess_line(int n)
+static void preprocess_line(struct preprocessor *prep, int n)
 {
     static TokenArray line, pragma;
 
     int i;
     struct token t;
+    assert(prep);
 
     do {
-        t = get_token();
+        t = get_token(prep);
         if (t.token == END) {
             array_clear(&line);
             array_clear(&pragma);
@@ -567,8 +607,8 @@ static void preprocess_line(int n)
 
         line.length = 0;
         if (t.token == '#') {
-            t = get_token();
-            if ((t.token != NEWLINE && in_active_block())
+            t = get_token(prep);
+            if ((t.token != NEWLINE && in_active_block(prep))
                 || t.token == IF
                 || t.token == ELSE
                 || !tok_cmp(t, ident__ifdef)
@@ -576,80 +616,84 @@ static void preprocess_line(int n)
                 || !tok_cmp(t, ident__elif)
                 || !tok_cmp(t, ident__endif))
             {
-                read_complete_line(&line, t, 1);
+                read_complete_line(prep, &line, t, 1);
                 if (!tok_cmp(t, ident__pragma)) {
-                    preprocess_pragma(&line);
+                    preprocess_pragma(prep, &line);
                 } else {
-                    preprocess_directive(&line);
+                    preprocess_directive(prep, &line);
                 }
             } else {
-                line_buffer = NULL;
+                prep->line = NULL;
             }
         } else {
-            assert(in_active_block());
-            i = read_complete_line(&line, t, 0);
-            while (i && expand(&line)) {
-                i = refill_expanding_line(&line);
+            assert(in_active_block(prep));
+            i = read_complete_line(prep, &line, t, 0);
+            while (i && expand(prep, &line)) {
+                i = refill_expanding_line(prep, &line);
             }
             for (i = 0; i < array_len(&line); ++i) {
                 t = array_get(&line, i);
                 if (!tok_cmp(t, ident__Pragma)) {
-                    i = preprocess_Pragma(&line, i, &pragma);
-                    preprocess_pragma(&pragma);
-                } else if (t.token != NEWLINE || output_preprocessed) {
-                    add_to_lookahead(t);
+                    i = preprocess_Pragma(prep, &line, i, &pragma);
+                    preprocess_pragma(prep, &pragma);
+                } else if (t.token != NEWLINE
+                    || context.target == TARGET_PREPROCESS)
+                {
+                    add_to_lookahead(prep, t);
                 }
             }
         }
-    } while (!is_lookahead_ready(n));
+    } while (!is_lookahead_ready(prep, n));
 
-    while (deque_len(&lookahead) < n) {
-        add_to_lookahead(basic_token[END]);
+    while (deque_len(&prep->lookahead) < n) {
+        add_to_lookahead(prep, basic_token[END]);
     }
 }
 
-INTERNAL void inject_line(char *line)
+INTERNAL void inject_line(struct preprocessor *prep, const char *line)
 {
-    assert(!line_buffer);
-    line_buffer = line;
-    preprocess_line(0);
-    while (deque_len(&lookahead) && deque_back(&lookahead).token == END) {
-        (void) deque_pop_back(&lookahead);
+    assert(!prep->line);
+
+    prep->line = line;
+    preprocess_line(prep, 0);
+    prep->line = NULL;
+    while (deque_len(&prep->lookahead)
+        && deque_back(&prep->lookahead).token == END)
+    {
+        (void) deque_pop_back(&prep->lookahead);
+    }
+}
+
+INTERNAL struct token next(struct preprocessor *input)
+{
+    if (deque_len(&input->lookahead) < 1) {
+        preprocess_line(input, 1);
     }
 
-    line_buffer = NULL;
+    return deque_pop_front(&input->lookahead);
 }
 
-INTERNAL struct token next(void)
+INTERNAL struct token peek(struct preprocessor *input)
 {
-    if (deque_len(&lookahead) < 1) {
-        preprocess_line(1);
-    }
-
-    return deque_pop_front(&lookahead);
+    return peekn(input, 1);
 }
 
-INTERNAL struct token peek(void)
-{
-    return peekn(1);
-}
-
-INTERNAL struct token peekn(int n)
+INTERNAL struct token peekn(struct preprocessor *input, int n)
 {
     assert(n > 0);
-    if (deque_len(&lookahead) < n) {
-        preprocess_line(n);
+    if (deque_len(&input->lookahead) < n) {
+        preprocess_line(input, n);
     }
 
-    return deque_get(&lookahead, n - 1);
+    return deque_get(&input->lookahead, n - 1);
 }
 
-INTERNAL struct token consume(enum token_type type)
+INTERNAL struct token consume(struct preprocessor *input, enum token_type type)
 {
     struct token t;
     const char *str;
 
-    t = next();
+    t = next(input);
     if (t.token != type) {
         switch (type) {
         case IDENTIFIER:
@@ -666,19 +710,19 @@ INTERNAL struct token consume(enum token_type type)
             break;
         }
 
-        error("Expected %s but got %s.", str, stringify_token(&t));
+        error(input, "Expected %s but got %s.", str, stringify_token(&t));
         exit(1);
     }
 
     return t;
 }
 
-INTERNAL void preprocess(FILE *output)
+INTERNAL void preprocess(struct preprocessor *prep, FILE *output)
 {
     struct token t;
 
-    output_preprocessed = 1;
-    while ((t = next()).token != END) {
+    assert(context.target == TARGET_PREPROCESS);
+    while ((t = next(prep)).token != END) {
         if (t.leading_whitespace) {
             fprintf(output, "%*s", t.leading_whitespace, " ");
         }

@@ -201,7 +201,10 @@ static Type remove_qualifiers(Type type)
  *
  * Verify that a named struct or union member does not already exist.
  */
-static struct member *add_member(Type parent, struct member m)
+static struct member *add_member(
+    struct preprocessor *input,
+    Type parent,
+    struct member m)
 {
     struct typetree *t;
 
@@ -216,7 +219,7 @@ static struct member *add_member(Type parent, struct member m)
     }
 
     if (m.name.len && find_type_member(parent, m.name, NULL)) {
-        error("Member '%s' already exists.", str_raw(m.name));
+        error(input, "Member '%s' already exists.", str_raw(m.name));
         exit(1);
     }
 
@@ -226,19 +229,19 @@ static struct member *add_member(Type parent, struct member m)
             if (is_array(m.type) && !t->is_flexible) {
                 t->is_flexible = 1;
             } else {
-                error("Member '%s' has incomplete type.", str_raw(m.name));
+                error(input, "Member '%s' has incomplete type.", str_raw(m.name));
                 exit(1);
             }
         }
         if (is_flexible(m.type)) {
             if (is_struct(parent)) {
-                error("Cannot add flexible struct member.");
+                error(input, "Cannot add flexible struct member.");
                 exit(1);
             }
             t->is_flexible = 1;
         }
         if (LONG_MAX - m.offset < size_of(m.type)) {
-            error("Object is too large.");
+            error(input, "Object is too large.");
             exit(1);
         }
         if (t->size < m.offset + size_of(m.type)) {
@@ -302,15 +305,16 @@ static void reset_field_alignment(Type type, Type clear)
         if (clear_bits >= m->field_backing) {
             assert(bits <= m->field_backing);
             if (bits != m->field_backing) {
-                type_add_field(type, name, backing, m->field_backing - bits);
+                type_add_field(NULL, type, name, backing,
+                    m->field_backing - bits);
             }
         } else if (bits > clear_bits) {
             mod = bits % clear_bits;
             if (mod) {
-                type_add_field(type, name, backing, mod);
+                type_add_field(NULL, type, name, backing, mod);
             }
         } else {
-            type_add_field(type, name, backing, clear_bits - bits);
+            type_add_field(NULL, type, name, backing, clear_bits - bits);
         }
     }
 
@@ -383,11 +387,7 @@ INTERNAL Type type_create_array(Type next, size_t count)
     Type type;
     struct typetree *t;
 
-    if (count * size_of(next) > LONG_MAX) {
-        error("Array is too large (%lu elements).", count);
-        exit(1);
-    }
-
+    assert(count * size_of(next) <= LONG_MAX);
     type = type_create(T_ARRAY);
     t = get_typetree_handle(type.ref);
     t->size = count;
@@ -444,11 +444,7 @@ INTERNAL Type type_set_volatile(Type type)
 
 INTERNAL Type type_set_restrict(Type type)
 {
-    if (!is_pointer(type)) {
-        error("Cannot apply 'restrict' qualifier to non-pointer types.");
-        exit(1);
-    }
-
+    assert(is_pointer(type));
     if (type.is_pointer) {
         type.is_pointer_restrict = 1;
     } else {
@@ -588,7 +584,11 @@ INTERNAL struct member *get_member(Type type, int n)
     return &array_get(&t->members, n);
 }
 
-INTERNAL struct member *type_add_member(Type parent, String name, Type type)
+INTERNAL struct member *type_add_member(
+    struct preprocessor *input,
+    Type parent,
+    String name,
+    Type type)
 {
     struct member m = {0};
 
@@ -599,7 +599,7 @@ INTERNAL struct member *type_add_member(Type parent, String name, Type type)
 
     m.name = name;
     m.type = type;
-    return add_member(parent, m);
+    return add_member(input, parent, m);
 }
 
 /*
@@ -668,7 +668,12 @@ static int pack_field_member(struct typetree *t, struct member *field)
  *
  * Anonymous union fields are ignored, not needed for alignment.
  */
-INTERNAL void type_add_field(Type parent, String name, Type type, size_t width)
+INTERNAL void type_add_field(
+    struct preprocessor *input,
+    Type parent,
+    String name,
+    Type type,
+    size_t width)
 {
     struct member m = {0};
     struct typetree *t;
@@ -677,13 +682,13 @@ INTERNAL void type_add_field(Type parent, String name, Type type, size_t width)
     assert(is_integer(type));
 
     if (width > (size_of(type) << 3) || (is_bool(type) && width > 1)) {
-        error("Width of bit-field (%lu bits) exceeds width of type %t.",
+        error(input, "Width of bit-field (%lu bits) exceeds width of type %t.",
             width, type);
         exit(1);
     }
 
     if (name.len && !width) {
-        error("Zero length field %s.", str_raw(name));
+        error(input, "Zero length field %s.", str_raw(name));
         exit(1);
     }
 
@@ -706,11 +711,14 @@ INTERNAL void type_add_field(Type parent, String name, Type type, size_t width)
     if (!width) {
         reset_field_alignment(parent, type);
     } else {
-        add_member(parent, m);
+        add_member(input, parent, m);
     }
 }
 
-INTERNAL void type_add_anonymous_member(Type parent, Type type)
+INTERNAL void type_add_anonymous_member(
+    struct preprocessor *input,
+    Type parent,
+    Type type)
 {
     int i;
     size_t offset;
@@ -725,17 +733,17 @@ INTERNAL void type_add_anonymous_member(Type parent, Type type)
         for (i = 0; i < nmembers(type); ++i) {
             m = array_get(&t->members, i);
             m.offset += offset;
-            add_member(parent, m);
+            add_member(input, parent, m);
         }
     } else if (is_union(parent) && is_struct(type)) {
         for (i = 0; i < nmembers(type); ++i) {
             m = array_get(&t->members, i);
-            add_member(parent, m);
+            add_member(input, parent, m);
         }
     } else {
         for (i = 0; i < nmembers(type); ++i) {
             m = array_get(&t->members, i);
-            type_add_member(parent, m.name, m.type);
+            type_add_member(input, parent, m.name, m.type);
         }
     }
 }
@@ -773,7 +781,7 @@ static size_t remove_anonymous_fields(struct typetree *t)
  * This function should only be called only once all members have been
  * added.
  */
-INTERNAL void type_seal(Type type)
+INTERNAL void type_seal(struct preprocessor *input, Type type)
 {
     struct typetree *t;
     size_t align;
@@ -785,7 +793,7 @@ INTERNAL void type_seal(Type type)
         assert(is_struct_or_union(type));
         align = remove_anonymous_fields(t);
         if (align == 0) {
-            error("%s has no named members.",
+            error(input, "%s has no named members.",
                 is_struct(type) ? "Struct" : "Union");
             exit(1);
         }

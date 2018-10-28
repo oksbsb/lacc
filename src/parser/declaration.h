@@ -4,6 +4,7 @@
 #include <lacc/ir.h>
 
 INTERNAL struct block *declaration(
+    struct preprocessor *input,
     struct definition *def,
     struct block *parent);
 
@@ -14,6 +15,7 @@ INTERNAL struct block *declaration(
  * Declarators can produce evaluation through VLA types.
  */
 INTERNAL struct block *declarator(
+    struct preprocessor *input,
     struct definition *def,
     struct block *parent,
     Type base,
@@ -21,11 +23,13 @@ INTERNAL struct block *declarator(
     String *name);
 
 INTERNAL Type declaration_specifiers(
+    struct preprocessor *input,
     int *storage_class,
     int *is_inline,
     int *is_register);
 
 INTERNAL struct block *declare_vla(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct symbol *sym);

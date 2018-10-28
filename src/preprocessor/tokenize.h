@@ -1,6 +1,7 @@
 #ifndef TOKENIZE_H
 #define TOKENIZE_H
 
+#include "strtab.h"
 #include <lacc/token.h>
 
 /*
@@ -17,7 +18,9 @@ EXTERNAL const struct token basic_token[128];
  * This is done as a last step in preprocessing before handing the token
  * over to the parser.
  */
-INTERNAL struct token convert_preprocessing_number(struct token t);
+INTERNAL struct token convert_preprocessing_number(
+	struct preprocessor *prep,
+	struct token t);
 
 /*
  * Transform preprocessing string by substituting all escape sequences
@@ -26,7 +29,9 @@ INTERNAL struct token convert_preprocessing_number(struct token t);
  * This is done as a last step in preprocessing before handing the token
  * over to the parser.
  */
-INTERNAL struct token convert_preprocessing_string(struct token t);
+INTERNAL struct token convert_preprocessing_string(
+    struct preprocessor *prep,
+    struct token t);
 
 /*
  * Transform preprocessing character to numeric literal, converting the
@@ -35,7 +40,9 @@ INTERNAL struct token convert_preprocessing_string(struct token t);
  * This is done as a last step in preprocessing before handing the token
  * over to the parser.
  */
-INTERNAL struct token convert_preprocessing_char(struct token t);
+INTERNAL struct token convert_preprocessing_char(
+	struct preprocessor *prep,
+	struct token t);
 
 /*
  * Parse and return next preprocessing token from given line. Assume
@@ -43,9 +50,9 @@ INTERNAL struct token convert_preprocessing_char(struct token t);
  * set to point to one index past the last character producing the
  * token.
  */
-INTERNAL struct token tokenize(const char *in, const char **endptr);
-
-/* Free memory used to hold temporary strings during tokenization. */
-INTERNAL void tokenize_reset(void);
+INTERNAL struct token tokenize(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr);
 
 #endif

@@ -165,7 +165,7 @@ static struct registr reg(enum reg r, int w)
 static int displacement_from_offset(size_t offset)
 {
     if (offset > INT_MAX) {
-        error("Offset %lu exceeds limit of %d\n", offset, INT_MAX);
+        error(NULL, "Offset %lu exceeds limit of %d\n", offset, INT_MAX);
         exit(1);
     }
 

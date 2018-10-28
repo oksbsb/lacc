@@ -76,6 +76,7 @@ INTERNAL struct symbol *sym_lookup(struct namespace *ns, String name);
  * symbols when they occur repeatedly.
  */
 INTERNAL struct symbol *sym_add(
+    struct preprocessor *input,
     struct namespace *ns,
     String name,
     Type type,

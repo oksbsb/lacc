@@ -3,7 +3,7 @@
 # define EXTERNAL extern
 #endif
 #include "parser/typetree.h"
-#include "preprocessor/input.h"
+#include "preprocessor/preprocess.h"
 #include <lacc/context.h>
 
 #include <assert.h>
@@ -73,8 +73,9 @@ static int vfprintf_cc(FILE *stream, const char *format, va_list ap)
 
 INTERNAL void verbose(const char *format, ...)
 {
+    va_list args;
+
     if (context.verbose) {
-        va_list args;
         va_start(args, format);
         vfprintf_cc(stdout, format, args);
         fputc('\n', stdout);
@@ -82,33 +83,43 @@ INTERNAL void verbose(const char *format, ...)
     }
 }
 
-INTERNAL void warning(const char *format, ...)
+INTERNAL void warning(const struct preprocessor *prep, const char *format, ...)
 {
     va_list args;
-    if (!context.suppress_warning) {
-        va_start(args, format);
-        fprintf(
-            stderr,
-            "(%s, %d) warning: ",
-            str_raw(current_file_path),
-            current_file_line);
-        vfprintf_cc(stderr, format, args);
-        fputc('\n', stderr);
-        va_end(args);
+    String file;
+    int line;
+
+    if (context.suppress_warning)
+        return;
+
+    va_start(args, format);
+    if (prep) {
+        input_pos(prep->input, &file, &line);
+        fprintf(stderr, "(%s, %d) warning: ", str_raw(file), line);
+    } else {
+        fprintf(stderr, "warning: ");
     }
+
+    vfprintf_cc(stderr, format, args);
+    fputc('\n', stderr);
+    va_end(args);
 }
 
-INTERNAL void error(const char *format, ...)
+INTERNAL void error(struct preprocessor *prep, const char *format, ...)
 {
     va_list args;
+    String file;
+    int line;
 
-    context.errors++;
     va_start(args, format);
-    fprintf(
-        stderr,
-        "(%s, %d) error: ",
-        str_raw(current_file_path),
-        current_file_line);
+    if (prep) {
+        prep->errors++;
+        input_pos(prep->input, &file, &line);
+        fprintf(stderr, "(%s, %d) error: ", str_raw(file), line);
+    } else {
+        fprintf(stderr, "error: ");
+    }
+
     vfprintf_cc(stderr, format, args);
     fputc('\n', stderr);
     va_end(args);

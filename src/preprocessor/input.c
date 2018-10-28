@@ -2,16 +2,12 @@
 # define INTERNAL
 # define EXTERNAL extern
 #endif
-#include "directive.h"
 #include "input.h"
 #include "strtab.h"
-#include <lacc/array.h>
 #include <lacc/context.h>
 
 #include <assert.h>
 #include <ctype.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -45,55 +41,75 @@ struct source {
     int line;
 };
 
-/* Temporary buffer used to construct search paths. */
-static char *path_buffer;
+struct input {
+    /*
+     * Keep stack of file descriptors as resolved by includes. Push and
+     * pop from the end of the list.
+     */
+    array_of(struct source) source_stack;
 
-/* Buffer for reading lines. */
-static char *rline;
-static size_t rlen;
+    /* Buffer for reading lines. */
+    char *rline;
+    size_t rlen;
+};
 
 /* List of directories to search on resolving include directives. */
 static array_of(const char *) search_path_list;
 
-/*
- * Keep stack of file descriptors as resolved by includes. Push and pop
- * from the end of the list.
- */
-static array_of(struct source) source_stack;
-
-/* Expose for diagnostics. */
-INTERNAL String current_file_path;
-INTERNAL int current_file_line;
-
-static struct source *current_file(void)
+static struct source *current_file(const struct input *input)
 {
-    assert(array_len(&source_stack));
-    return &array_get(&source_stack, array_len(&source_stack) - 1);
+    assert(array_len(&input->source_stack));
+    return &array_back(&input->source_stack);
 }
 
-static void push_file(struct source source)
+INTERNAL int input_pos(const struct input *input, String *path, int *line)
+{
+    struct source *file;
+
+    file = current_file(input);
+    *path = file->path;
+    *line = file->line;
+    return 0;
+}
+
+INTERNAL void input_set_line(struct input *input, int line)
+{
+    struct source *file;
+
+    file = current_file(input);
+    file->line = line;
+}
+
+INTERNAL void input_set_file(struct input *input, String path)
+{
+    struct source *file;
+
+    file = current_file(input);
+    file->path = path;
+}
+
+static void push_file(struct input *input, struct source source)
 {
     assert(source.file);
     assert(source.path.len);
 
-    current_file_line = 0;
-    current_file_path = source.path;
     source.buffer = malloc(FILE_BUFFER_SIZE);
     source.size = FILE_BUFFER_SIZE;
-    array_push_back(&source_stack, source);
+    array_push_back(&input->source_stack, source);
 }
 
-static int pop_file(void)
+static int pop_file(struct input *input)
 {
     unsigned len;
     struct source source;
 
-    len = array_len(&source_stack);
+    len = array_len(&input->source_stack);
     if (len) {
-        source = array_pop_back(&source_stack);
+        source = array_pop_back(&input->source_stack);
         if (source.file != stdin) {
             fclose(source.file);
         }
+
         free(source.buffer);
         if (len - 1) {
             return 1;
@@ -103,16 +119,20 @@ static int pop_file(void)
     return EOF;
 }
 
-INTERNAL void input_finalize(void)
+INTERNAL void input_close(struct input *input)
 {
-    while (pop_file() != EOF)
+    while (pop_file(input) != EOF)
         ;
 
-    assert(!array_len(&source_stack));
-    array_clear(&source_stack);
+    assert(!array_len(&input->source_stack));
+    array_clear(&input->source_stack);
+    free(input->rline);
+    free(input);
+}
+
+INTERNAL void input_finalize(void)
+{
     array_clear(&search_path_list);
-    free(path_buffer);
-    free(rline);
 }
 
 static size_t path_dirlen(const char *path)
@@ -121,25 +141,31 @@ static size_t path_dirlen(const char *path)
     return (rchr) ? rchr - path : 0;
 }
 
-static char *create_path(const char *path, size_t dirlen, const char *name)
+static char *create_path(
+    const char *path,
+    size_t dirlen,
+    const char *name,
+    struct strtab *strtab)
 {
-    static size_t path_buffer_length;
     size_t required, namelen;
 
     namelen = strlen(name);
     required = dirlen + namelen + 2;
-    if (required > path_buffer_length) {
-        path_buffer_length = required;
-        path_buffer = realloc(path_buffer, path_buffer_length);
+    if (required > strtab->catlen) {
+        strtab->catlen = required;
+        strtab->catbuf = realloc(strtab->catbuf, strtab->catlen);
     }
 
-    strncpy(path_buffer, path, dirlen);
-    path_buffer[dirlen] = '/';
-    strncpy(path_buffer + dirlen + 1, name, namelen + 1);
-    return path_buffer;
+    strncpy(strtab->catbuf, path, dirlen);
+    strtab->catbuf[dirlen] = '/';
+    strncpy(strtab->catbuf + dirlen + 1, name, namelen + 1);
+    return strtab->catbuf;
 }
 
-INTERNAL void include_file(const char *name)
+INTERNAL int include_file(
+    struct input *input,
+    struct strtab *strtab,
+    const char *name)
 {
     const char *path;
     struct source *file;
@@ -150,24 +176,28 @@ INTERNAL void include_file(const char *name)
      * which itself can include folders. Except for root level, where
      * the whole name is already specified.
      */
-    file = current_file();
+    file = current_file(input);
     if (file->dirlen && name[0] != '/') {
-        path = create_path(str_raw(file->path), file->dirlen, name);
+        path = create_path(str_raw(file->path), file->dirlen, name, strtab);
     } else {
         path = name;
     }
 
     source.file = fopen(path, "r");
     if (source.file) {
-        source.path = str_register(path, strlen(path));
+        source.path = str_register(strtab, path, strlen(path));
         source.dirlen = path_dirlen(path);
-        push_file(source);
-    } else {
-        include_system_file(name);
+        push_file(input, source);
+        return 1;
     }
+
+    return include_system_file(input, strtab, name);
 }
 
-INTERNAL void include_system_file(const char *name)
+INTERNAL int include_system_file(
+    struct input *input,
+    struct strtab *strtab,
+    const char *name)
 {
     struct source source = {0};
     const char *path;
@@ -181,21 +211,22 @@ INTERNAL void include_system_file(const char *name)
             dirlen--;
             assert(dirlen);
         }
-        path = create_path(path, dirlen, name);
+
+        path = create_path(path, dirlen, name, strtab);
         source.file = fopen(path, "r");
         if (source.file) {
-            source.path = str_register(path, strlen(path));
+            source.path = str_register(strtab, path, strlen(path));
             source.dirlen = path_dirlen(path);
             break;
         }
     }
 
     if (source.file) {
-        push_file(source);
-    } else {
-        error("Unable to resolve include file '%s'.", name);
-        exit(1);
+        push_file(input, source);
+        return 1;
     }
+
+    return 0;
 }
 
 INTERNAL int add_include_search_path(const char *path)
@@ -204,21 +235,15 @@ INTERNAL int add_include_search_path(const char *path)
     return 0;
 }
 
-INTERNAL void set_input_file(const char *path)
+INTERNAL struct input *input_open(const char *path)
 {
     const char *sep;
+    struct input *input;
     struct source source = {0};
 
-    while (pop_file() != EOF)
-        ;
-
-    if (!rline) {
-        rlen = FILE_BUFFER_SIZE;
-        rline = calloc(rlen, sizeof(*rline));
-    } else {
-        assert(rlen > 0);
-        rline[0] = '\0';
-    }
+    input = calloc(1, sizeof(*input));
+    input->rlen = FILE_BUFFER_SIZE;
+    input->rline = calloc(input->rlen, sizeof(*input->rline));
 
     if (path) {
         sep = strrchr(path, '/');
@@ -228,7 +253,7 @@ INTERNAL void set_input_file(const char *path)
             source.dirlen = sep - path;
         }
         if (!source.file) {
-            error("Unable to open file %s.", path);
+            error(NULL, "Unable to open file %s.", path);
             exit(1);
         }
     } else {
@@ -236,7 +261,8 @@ INTERNAL void set_input_file(const char *path)
         source.path = str_init("<stdin>");
     }
 
-    push_file(source);
+    push_file(input, source);
+    return input;
 }
 
 /*
@@ -342,7 +368,7 @@ static size_t read_literal(const char *line, char **buf, int *lines)
                 end += 1;
                 continue;
             } else {
-                error("Unexpected newline in literal.");
+                error(NULL, "Unexpected newline in literal.");
                 exit(1);
             }
             break;
@@ -393,26 +419,23 @@ static size_t read_literal(const char *line, char **buf, int *lines)
  * be smaller than this number, by any of the transformations removing
  * characters.
  */
-static size_t read_line(const char *line, size_t len, int *linecount)
+static size_t read_line(struct source *fn, char *ptr)
 {
+    char c;
     int lines;
-    size_t count;
-    const char *end;
-    char *ptr, c;
+    size_t count, len;
+    const char *end, *line;
 
-    if (len >= rlen) {
-        rlen = len + 1;
-        rline = realloc(rline, rlen);
-    }
+    line = fn->buffer + fn->processed;
+    len = fn->read - fn->processed;
 
     lines = 0;
-    ptr = rline + 1;
     assert(ptr[-1] == '\0');
     end = line;
     do {
         switch (*end) {
         case '\n':
-            *linecount += lines + 1;
+            fn->line += lines + 1;
             *ptr++ = '\0';
             return end + 1 - line;
         case '\\':
@@ -447,7 +470,7 @@ static size_t read_line(const char *line, size_t len, int *linecount)
                     return 0;
                 }
                 ptr[-1] = '\0';
-                *linecount += lines + 1;
+                fn->line += lines + 1;
                 return end + count + 1 - line;
             }
             break;
@@ -472,9 +495,12 @@ static size_t read_line(const char *line, size_t len, int *linecount)
 /*
  * Read the next line from file input, doing initial pre-preprocessing.
  */
-static char *initial_preprocess_line(struct source *fn)
+static char *initial_preprocess_line(
+    struct input *input,
+    struct source *fn)
 {
-    size_t added;
+    size_t added, len;
+
     assert(fn->buffer);
     assert(fn->processed <= fn->read);
     assert(fn->read < fn->size);
@@ -483,7 +509,7 @@ static char *initial_preprocess_line(struct source *fn)
         if (fn->processed == fn->read || !fn->processed) {
             if (feof(fn->file)) {
                 if (fn->read > fn->processed) {
-                    error("Unable to process the whole input.");
+                    error(NULL, "Unable to process the whole input.");
                     exit(1);
                 }
                 return NULL;
@@ -508,18 +534,20 @@ static char *initial_preprocess_line(struct source *fn)
                     return NULL;
                 }
                 if (fn->buffer[fn->read - 1] != '\n') {
-                    error("Missing newline at end of file.");
+                    error(NULL, "Missing newline at end of file.");
                     fn->buffer[fn->read] = '\n';
                 }
             }
         }
 
         assert(fn->processed < fn->read);
-        added = read_line(
-            fn->buffer + fn->processed,
-            fn->read - fn->processed,
-            &fn->line);
+        len = fn->read - fn->processed;
+        if (len >= input->rlen) {
+            input->rlen = len + 1;
+            input->rline = realloc(input->rline, input->rlen);
+        }
 
+        added = read_line(fn, input->rline + 1);
         if (!added) {
             if (!fn->processed) {
                 fn->size += FILE_BUFFER_SIZE;
@@ -537,51 +565,30 @@ static char *initial_preprocess_line(struct source *fn)
     } while (!added);
 
     fn->processed += added;
-    return rline + 1;
+    return input->rline + 1;
 }
 
-static int is_directive(const char *line)
+/*
+ * Yield next line ready for further preprocessing. Joins continuations,
+ * and replaces comments with a single space. Line implicitly ends with
+ * a single newline character ('\n'), but it is not included.
+ */
+INTERNAL const char *getprepline(struct input *input)
 {
-    while (*line == ' ' || *line == '\t') {
-        line++;
-    }
-
-    return *line == '#';
-}
-
-INTERNAL char *getprepline(void)
-{
-    static int stale;
-
-    struct source *source;
-    char *line;
-    int loc;
+    struct source *source = NULL;
+    const char *line;
 
     do {
-        if (!array_len(&source_stack)) {
+        if (!array_len(&input->source_stack)) {
             return NULL;
         }
-        source = &array_back(&source_stack);
-        loc = source->line;
-        if (stale) {
-            current_file_path = source->path;
-            current_file_line = source->line;
-            stale = 0;
-        }
-        line = initial_preprocess_line(source);
-        current_file_line += source->line - loc;
-        if (!line) {
-            stale = 1;
-            if (pop_file() == EOF) {
-                return NULL;
-            }
-        }
-        if (!in_active_block() && !is_directive(line)) {
-            line = NULL;
-        }
-    } while (!line);
 
-    if (context.verbose) {
+        source = &array_back(&input->source_stack);
+        line = initial_preprocess_line(input, source);
+
+    } while (!line && pop_file(input) != EOF);
+
+    if (context.verbose && line) {
         verbose("(%s, %d): `%s`", str_raw(source->path), source->line, line);
     }
 

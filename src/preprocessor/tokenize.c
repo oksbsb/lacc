@@ -2,6 +2,7 @@
 # define INTERNAL
 # define EXTERNAL extern
 #endif
+#include "preprocess.h"
 #include "strtab.h"
 #include "tokenize.h"
 #include <lacc/context.h>
@@ -105,7 +106,10 @@ INTERNAL const struct token basic_token[] = {
  *      (\.)?(0-9){\.a-zA-Z_0-9(e+|e-|E+|E-)}*
  *
  */
-static struct token stringtonum(const char *in, const char **endptr)
+static struct token stringtonum(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     const char *ptr = in;
     struct token tok = {PREP_NUMBER};
@@ -131,7 +135,7 @@ static struct token stringtonum(const char *in, const char **endptr)
         }
     }
 
-    tok.d.string = str_register(ptr, in - ptr);
+    tok.d.string = str_register(&prep->strtab, ptr, in - ptr);
     *endptr = in;
     return tok;
 }
@@ -173,6 +177,7 @@ static enum suffix read_integer_suffix(const char *ptr, const char **endptr)
 }
 
 static const Type constant_integer_type(
+    struct preprocessor *prep,
     unsigned long int value,
     enum suffix suffix,
     int is_decimal)
@@ -190,7 +195,7 @@ static const Type constant_integer_type(
         } else {
             type = basic_type__unsigned_long;
             if (is_decimal) {
-                warning("Conversion of decimal constant to unsigned.");
+                warning(prep, "Conversion of decimal constant to unsigned.");
             }
         }
         break;
@@ -208,7 +213,7 @@ static const Type constant_integer_type(
         } else {
             type = basic_type__unsigned_long;
             if (is_decimal) {
-                warning("Conversion of decimal constant to unsigned.");
+                warning(prep, "Conversion of decimal constant to unsigned.");
             }
         }
         break;
@@ -221,7 +226,9 @@ static const Type constant_integer_type(
     return type;
 }
 
-INTERNAL struct token convert_preprocessing_number(struct token t)
+INTERNAL struct token convert_preprocessing_number(
+    struct preprocessor *prep,
+    struct token t)
 {
     const char *str;
     const char *endptr;
@@ -243,7 +250,8 @@ INTERNAL struct token convert_preprocessing_number(struct token t)
     suffix = read_integer_suffix(endptr, &endptr);
     if (endptr - str == len) {
         assert(isdigit(*str));
-        tok.type = constant_integer_type(tok.d.val.u, suffix, *str != '0');
+        tok.type =
+            constant_integer_type(prep, tok.d.val.u, suffix, *str != '0');
     } else {
         /*
          * If the integer conversion did not consume the whole token,
@@ -270,9 +278,9 @@ INTERNAL struct token convert_preprocessing_number(struct token t)
 
     if (errno || (endptr - str != len)) {
         if (errno == ERANGE) {
-            error("Numeric literal '%s' is out of range.", str);
+            error(prep, "Numeric literal '%s' is out of range.", str);
         } else {
-            error("Invalid numeric literal '%s'.", str);
+            error(prep, "Invalid numeric literal '%s'.", str);
         }
         exit(1);
     }
@@ -282,7 +290,10 @@ INTERNAL struct token convert_preprocessing_number(struct token t)
 
 #define isoctal(c) ((c) >= '0' && (c) < '8')
 
-static char convert_escape_sequence(const char *in, const char **endptr)
+static char convert_escape_sequence(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     static char buf[4];
     long n;
@@ -303,7 +314,7 @@ static char convert_escape_sequence(const char *in, const char **endptr)
     case '\\': return '\\';
     case 'x':
         if (!isxdigit(in[1])) {
-            error("Empty hexadecimal escape sequence.");
+            error(prep, "Empty hexadecimal escape sequence.");
             exit(1);
         }
         return (char) strtol(&in[1], (char **) endptr, 16);
@@ -323,17 +334,20 @@ static char convert_escape_sequence(const char *in, const char **endptr)
         *endptr = in + i;
         return (char) n;
     default:
-        error("Invalid escape sequence '\\%c'.", *in);
+        error(prep, "Invalid escape sequence '\\%c'.", *in);
         exit(1);
     }
 }
 
-static char convert_char(const char *in, const char **endptr)
+static char convert_char(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     char c;
 
     if (*in == '\\') {
-        c = convert_escape_sequence(in + 1, endptr);
+        c = convert_escape_sequence(prep, in + 1, endptr);
     } else {
         c = *in;
         *endptr = in + 1;
@@ -342,54 +356,43 @@ static char convert_char(const char *in, const char **endptr)
     return c;
 }
 
-static char *string_buffer;
-static size_t string_buffer_cap;
-
-INTERNAL void tokenize_reset(void)
-{
-    if (string_buffer) {
-        free(string_buffer);
-        string_buffer = NULL;
-        string_buffer_cap = 0;
-    }
-}
-
-static char *get_string_buffer(size_t length)
-{
-    if (length > string_buffer_cap) {
-        string_buffer_cap = length;
-        string_buffer = realloc(string_buffer, length);
-    }
-
-    return string_buffer;
-}
-
-INTERNAL struct token convert_preprocessing_string(struct token t)
+INTERNAL struct token convert_preprocessing_string(
+    struct preprocessor *prep,
+    struct token t)
 {
     struct token tok = {STRING};
     const char *raw, *ptr;
     char *buf, *btr;
+    size_t len;
 
     raw = str_raw(t.d.string);
-    buf = get_string_buffer(t.d.string.len);
+    len = t.d.string.len;
+    if (len > prep->strtab.catlen) {
+        prep->strtab.catlen = len;
+        prep->strtab.catbuf = realloc(prep->strtab.catbuf, len);
+    }
+
+    buf = prep->strtab.catbuf;
     btr = buf;
     ptr = raw;
     while (ptr - raw < t.d.string.len) {
-        *btr++ = convert_char(ptr, &ptr);
+        *btr++ = convert_char(prep, ptr, &ptr);
     }
 
-    tok.d.string = str_register(buf, btr - buf);
+    tok.d.string = str_register(&prep->strtab, buf, btr - buf);
     return tok;
 }
 
-INTERNAL struct token convert_preprocessing_char(struct token t)
+INTERNAL struct token convert_preprocessing_char(
+    struct preprocessor *prep,
+    struct token t)
 {
     struct token tok = {NUMBER};
     const char *raw;
 
     raw = str_raw(t.d.string);
     tok.type = basic_type__int;
-    tok.d.val.i = convert_char(raw, &raw);
+    tok.d.val.i = convert_char(prep, raw, &raw);
     return tok;
 }
 
@@ -435,7 +438,10 @@ static void parse_escape_sequence(const char *in, const char **endptr)
  * starting from *in. The position of the character after the last '
  * character is stored in endptr.
  */
-static struct token strtochar(const char *in, const char **endptr)
+static struct token strtochar(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     struct token tok = {PREP_CHAR};
     const char *start;
@@ -447,22 +453,25 @@ static struct token strtochar(const char *in, const char **endptr)
     } else if (*in != '\'') {
         in++;
     } else {
-        error("Empty character constant.");
+        error(prep, "Empty character constant.");
         exit(1);
     }
 
     if (*in != '\'') {
-        error("Multi-character constants are not supported.");
+        error(prep, "Multi-character constants are not supported.");
         exit(1);
     }
 
-    tok.d.string = str_register(start, in - start);
+    tok.d.string = str_register(&prep->strtab, start, in - start);
     *endptr = in + 1;
     return tok;
 }
 
 /* Parse string literal inputs delimited by quotation marks. */
-static struct token strtostr(const char *in, const char **endptr)
+static struct token strtostr(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     struct token tok = {PREP_STRING};
     const char *start;
@@ -480,7 +489,7 @@ static struct token strtostr(const char *in, const char **endptr)
     }
 
     assert(*in == '"');
-    tok.d.string = str_register(start, in - start);
+    tok.d.string = str_register(&prep->strtab, start, in - start);
     *endptr = in + 1;
     return tok;
 }
@@ -524,7 +533,10 @@ static struct token strtostr(const char *in, const char **endptr)
  * Parse string as keyword or identifier. First character should be
  * alphabetic or underscore.
  */
-static struct token strtoident(const char *in, const char **endptr)
+static struct token strtoident(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     const char *start = in;
     struct token ident = {IDENTIFIER};
@@ -636,13 +648,16 @@ static struct token strtoident(const char *in, const char **endptr)
         in++;
     }
 
-    ident.d.string = str_register(start, in - start);
+    ident.d.string = str_register(&prep->strtab, start, in - start);
     ident.is_expandable = 1;
     *endptr = in;
     return ident;
 }
 
-static struct token strtoop(const char *in, const char **endptr)
+static struct token strtoop(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     const char *start = in;
     struct token t;
@@ -710,7 +725,7 @@ static struct token strtoop(const char *in, const char **endptr)
     *endptr = start + 1;
     t = basic_token[(int) *start];
     if (t.token == END) {
-        error("Unknown token '%c'", (int) *start);
+        error(prep, "Unknown token '%c'", (int) *start);
         exit(1);
     }
 
@@ -728,7 +743,10 @@ static int skip_spaces(const char *in, const char **endptr)
     return in - start;
 }
 
-INTERNAL struct token tokenize(const char *in, const char **endptr)
+INTERNAL struct token tokenize(
+    struct preprocessor *prep,
+    const char *in,
+    const char **endptr)
 {
     int ws;
     struct token tok;
@@ -740,17 +758,17 @@ INTERNAL struct token tokenize(const char *in, const char **endptr)
     in = *endptr;
 
     if (isalpha(*in) || *in == '_') {
-        tok = strtoident(in, endptr);
+        tok = strtoident(prep, in, endptr);
     } else if (*in == '\0') {
         tok = basic_token[END];
     } else if (isdigit(*in) || (*in == '.' && isdigit(in[1]))) {
-        tok = stringtonum(in, endptr);
+        tok = stringtonum(prep, in, endptr);
     } else if (*in == '"') {
-        tok = strtostr(in, endptr);
+        tok = strtostr(prep, in, endptr);
     } else if (*in == '\'') {
-        tok = strtochar(in, endptr);
+        tok = strtochar(prep, in, endptr);
     } else {
-        tok = strtoop(in, endptr);
+        tok = strtoop(prep, in, endptr);
     }
 
     tok.leading_whitespace = ws;

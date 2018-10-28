@@ -157,7 +157,7 @@ INTERNAL void cfg_define(struct definition *def, const struct symbol *sym)
     deque_push_back(&definitions, def);
 }
 
-INTERNAL struct definition *parse(void)
+INTERNAL struct definition *parse(struct preprocessor *input)
 {
     int i;
     struct block *block;
@@ -176,8 +176,8 @@ INTERNAL struct definition *parse(void)
      * up the buffer. Tentative declarations will only affect the symbol
      * table.
      */
-    while (!deque_len(&definitions) && peek().token != END) {
-        declaration(NULL, NULL);
+    while (!deque_len(&definitions) && peek(input).token != END) {
+        declaration(input, NULL, NULL);
     }
 
     /*
@@ -185,7 +185,7 @@ INTERNAL struct definition *parse(void)
      * reach end of input.
      */
     if (!deque_len(&definitions)) {
-        assert(peek().token == END);
+        assert(peek(input).token == END);
         for (i = 0; i < array_len(&expressions); ++i) {
             block = array_get(&expressions, i);
             recycle_block(block);

@@ -20,15 +20,19 @@ enum cstd {
     STD_C11
 };
 
-/* Global information about translation unit. */
+/*
+ * Global information about all translation units.
+ *
+ * Represents configuration given on the command line invocation.
+ */
 INTERNAL struct context {
-    int errors;
-    int verbose;
-    int suppress_warning;
-    unsigned int pic : 1;            /* position independent code */
-    unsigned int debug : 1;          /* Generate debug information. */
     enum target target;
     enum cstd standard;
+
+    unsigned int verbose : 1;
+    unsigned int suppress_warning : 1;
+    unsigned int pic : 1;            /* position independent code */
+    unsigned int debug : 1;          /* Generate debug information. */
 } context;
 
 /*
@@ -37,12 +41,18 @@ INTERNAL struct context {
  */
 INTERNAL void verbose(const char *, ...);
 
+struct preprocessor;
+
 /*
  * Output warning to stderr. No-op if context.suppress_warning is set.
  */
-INTERNAL void warning(const char *, ...);
+INTERNAL void warning(
+    const struct preprocessor *input,
+    const char *format, ...);
 
 /* Output error to stderr. */
-INTERNAL void error(const char *, ...);
+INTERNAL void error(
+    struct preprocessor *input,
+    const char *format, ...);
 
 #endif

@@ -3,11 +3,15 @@
 
 #include <lacc/ir.h>
 
-INTERNAL struct block *expression(struct definition *def, struct block *block);
+INTERNAL struct block *expression(
+	struct preprocessor *input,
+	struct definition *def,
+	struct block *block);
 
-INTERNAL struct var constant_expression(void);
+INTERNAL struct var constant_expression(struct preprocessor *input);
 
 INTERNAL struct block *assignment_expression(
+	struct preprocessor *input,
 	struct definition *def,
 	struct block *block);
 

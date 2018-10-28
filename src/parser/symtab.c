@@ -204,7 +204,7 @@ INTERNAL void pop_scope(struct namespace *ns)
         for (i = 0; i < array_len(&ns->symbol); ++i) {
             sym = array_get(&ns->symbol, i);
             if (ns == &ns_label && sym->symtype == SYM_TENTATIVE) {
-                error("Undefined label '%s'.", sym_name(sym));
+                error(NULL, "Undefined label '%s'.", sym_name(sym));
             }
             free(sym);
         }
@@ -256,7 +256,7 @@ INTERNAL const char *sym_name(const struct symbol *sym)
     }
 
     if (strlen(raw) > 100) {
-        error("Symbol name %s exceeds limit.", raw);
+        error(NULL, "Symbol name %s exceeds limit.", raw);
         exit(1);
     }
 
@@ -283,7 +283,10 @@ INTERNAL const char *sym_name(const struct symbol *sym)
  * For functions, the last parameter list is applied for as long as the
  * symbol is still tentative.
  */
-static void sym_apply_type(struct symbol *sym, Type type)
+static void sym_apply_type(
+    struct preprocessor *input,
+    struct symbol *sym,
+    Type type)
 {
     if (is_function(sym->type)
         && is_function(type)
@@ -307,7 +310,7 @@ static void sym_apply_type(struct symbol *sym, Type type)
     }
 
     if (!type_equal(sym->type, type)) {
-        error("'%s' declared with different types.", sym_name(sym));
+        error(input, "'%s' declared with different types.", sym_name(sym));
         exit(1);
     }
 }
@@ -316,6 +319,7 @@ static void sym_apply_type(struct symbol *sym, Type type)
  * Update existing symbol from new declaration or tentative definition.
  */
 static struct symbol *sym_redeclare(
+    struct preprocessor *input,
     struct symbol *sym,
     struct namespace *ns,
     Type type,
@@ -325,7 +329,8 @@ static struct symbol *sym_redeclare(
     switch (linkage) {
     case LINK_INTERN:
         if (sym->linkage == LINK_EXTERN) {
-            error("'%s' was previously defined non-static.", sym_name(sym));
+            error(input,
+                "'%s' was previously defined non-static.", sym_name(sym));
             exit(1);
         }
         sym->linkage = LINK_INTERN;
@@ -333,14 +338,15 @@ static struct symbol *sym_redeclare(
     case LINK_EXTERN:
         if (sym->linkage == LINK_INTERN) {
             if (symtype == SYM_DEFINITION || symtype == SYM_TENTATIVE) {
-                error("'%s' was previously declared static.", sym_name(sym));
+                error(input,
+                    "'%s' was previously declared static.", sym_name(sym));
                 exit(1);
             }
         }
         break;
     case LINK_NONE:
         if (sym->depth == current_scope_depth(ns) && sym->depth) {
-            error("Duplicate definition of '%s'.", sym_name(sym));
+            error(input, "Duplicate definition of '%s'.", sym_name(sym));
             exit(1);
         }
         break;
@@ -354,22 +360,23 @@ static struct symbol *sym_redeclare(
     case SYM_DECLARATION:
         if (sym->symtype == SYM_DEFINITION) {
             if (!type_equal(sym->type, type)) {
-                error("'%s' redeclared with different type.", sym_name(sym));
+                error(input,
+                    "'%s' redeclared with different type.", sym_name(sym));
                 exit(1);
             }
         } else {
-            sym_apply_type(sym, type);
+            sym_apply_type(input, sym, type);
         }
         break;
     case SYM_DEFINITION:
         sym->symtype = SYM_DEFINITION;
-        sym_apply_type(sym, type);
+        sym_apply_type(input, sym, type);
         break;
     case SYM_TAG:
     case SYM_TYPEDEF:
     case SYM_CONSTANT:
         if (sym->symtype != symtype || !type_equal(sym->type, type)) {
-            error("Conflicting declaration of '%s'.", sym_name(sym));
+            error(input, "Conflicting declaration of '%s'.", sym_name(sym));
             exit(1);
         }
         break;
@@ -412,6 +419,7 @@ INTERNAL void sym_make_visible(struct namespace *ns, struct symbol *sym)
  * with other external declarations.
  */
 INTERNAL struct symbol *sym_add(
+    struct preprocessor *input,
     struct namespace *ns,
     String name,
     Type type,
@@ -431,7 +439,7 @@ INTERNAL struct symbol *sym_add(
         assert(ns == &ns_ident);
         sym = sym_lookup_function(name);
         if (sym) {
-            sym_apply_type(sym, type);
+            sym_apply_type(input, sym, type);
             sym_make_visible(ns, sym);
             if (depth < sym->depth) {
                 sym->depth = depth;
@@ -442,7 +450,7 @@ INTERNAL struct symbol *sym_add(
         && (!depth || linkage == LINK_EXTERN)
         && !sym->depth)
     {
-        return sym_redeclare(sym, ns, type, symtype, linkage);
+        return sym_redeclare(input, sym, ns, type, symtype, linkage);
     }
 
     sym = alloc_sym();

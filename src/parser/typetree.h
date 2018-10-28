@@ -5,6 +5,7 @@
 # define INTERNAL
 #endif
 
+#include <lacc/context.h>
 #include <lacc/type.h>
 
 #include <stdlib.h>
@@ -46,7 +47,11 @@ INTERNAL Type get_type_placeholder(void);
  * For functions taking variable number of arguments, the last member
  * should be passed as "...".
  */
-INTERNAL struct member *type_add_member(Type parent, String name, Type type);
+INTERNAL struct member *type_add_member(
+	struct preprocessor *input,
+	Type parent,
+	String name,
+	Type type);
 
 /*
  * Add unnamed struct or union member, which itself has to be struct or
@@ -54,20 +59,28 @@ INTERNAL struct member *type_add_member(Type parent, String name, Type type);
  *
  * This is a C11 feature.
  */
-INTERNAL void type_add_anonymous_member(Type parent, Type type);
+INTERNAL void type_add_anonymous_member(
+	struct preprocessor *input,
+	Type parent,
+	Type type);
 
 /*
  * Add bitfield to struct or union.
  *
  * Field type must be either signed or unsigned int.
  */
-INTERNAL void type_add_field(Type parent, String name, Type type, size_t width);
+INTERNAL void type_add_field(
+	struct preprocessor *input,
+	Type parent,
+	String name,
+	Type type,
+	size_t width);
 
 /*
  * Commit type members and calculate final trailing padding. Must be
  * called after adding struct or union members of a new type.
  */
-INTERNAL void type_seal(Type parent);
+INTERNAL void type_seal(struct preprocessor *input, Type parent);
 
 /*
  * Complete array type by specifying a length, called after reading

@@ -14,6 +14,7 @@ INTERNAL struct var eval(
 
 /* Evaluate l <op> r, or unary expression <op> l. */
 INTERNAL struct expression eval_expr(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     enum optype optype,
@@ -21,12 +22,14 @@ INTERNAL struct expression eval_expr(
 
 /* Evaluate &a. */
 INTERNAL struct var eval_addr(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct var var);
 
 /* Evaluate *a. */
 INTERNAL struct var eval_deref(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct var var);
@@ -41,6 +44,7 @@ INTERNAL struct var eval_deref(
  * typeof(a) before assignment.
  */
 INTERNAL struct var eval_assign(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct var target,
@@ -48,6 +52,7 @@ INTERNAL struct var eval_assign(
 
 /* Create and return a copy of variable. */
 INTERNAL struct var eval_copy(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct var var);
@@ -56,16 +61,20 @@ INTERNAL struct var eval_copy(
  * Evaluate (+val). Perform integer promotion, and results in an
  * r-value.
  */
-INTERNAL struct expression eval_unary_plus(struct var val);
+INTERNAL struct expression eval_unary_plus(
+    struct preprocessor *input,
+    struct var val);
 
 /* Evaluate operands of (a) ? b : c, and return result type. */
 INTERNAL Type eval_conditional(
+    struct preprocessor *input,
     struct definition *def,
     struct block *left,
     struct block *right);
 
 /* Prepare parameter expression. */
 INTERNAL struct expression eval_param(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct expression expr);
@@ -86,6 +95,7 @@ INTERNAL void param(struct block *block, struct expression arg);
  *      return a;
  */
 INTERNAL struct expression eval_return(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block);
 
@@ -104,12 +114,14 @@ INTERNAL struct expression eval_expression_statement(
  * determined by run-time evaluated expression.
  */
 INTERNAL void eval_vla_alloc(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     const struct symbol *sym);
 
 /* Evaluate size of variable length array. */
 INTERNAL struct expression eval_vla_size(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     Type type);
@@ -120,6 +132,7 @@ INTERNAL struct expression eval_vla_size(
  * block of execution.
  */
 INTERNAL struct block *eval_logical_or(
+    struct preprocessor *input,
     struct definition *def,
     struct block *left,
     struct block *right_top,
@@ -127,6 +140,7 @@ INTERNAL struct block *eval_logical_or(
 
 /* Evaluate left->expr && right->expr. */
 INTERNAL struct block *eval_logical_and(
+    struct preprocessor *input,
     struct definition *def,
     struct block *left,
     struct block *right_top,

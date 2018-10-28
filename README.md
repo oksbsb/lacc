@@ -81,7 +81,7 @@ This is where you will find the core data structures, and interfaces between pre
 
 ### Preprocessor
 Preprocessing includes reading files, tokenization, macro expansion, and directive handling.
-The interface to the preprocessor is `peek(0)`, `peekn(1)`, `consume(1)`, and `next(0)`, which looks at a stream of preprocessed `struct token` objects.
+The interface to the preprocessor is `peek()`, `peekn()`, `consume()`, and `next()`, which looks at a stream of preprocessed `struct token` objects.
 These are defined in [include/lacc/token.h](include/lacc/token.h).
 
 Input processing is done completely lazily, driven by the parser calling these four functions to consume more input.
@@ -114,25 +114,25 @@ Expressions also contain variable operands, which can encode memory locations, a
 
 ### Parser
 The parser is hand coded recursive descent, with main parts split into [src/parser/declaration.c](src/parser/declaration.c), [src/parser/initializer.c](src/parser/initializer.c), [src/parser/expression.c](src/parser/expression.c), and [src/parser/statement.c](src/parser/statement.c).
-The current function control flow graph, and the current active basic block in that graph, are passed as arguments to each production.
+The preprocessed input stream, current function control flow graph, and current active basic block in that graph, are passed as arguments to each production.
 The graph is gradually constructed as new three-address code instructions are added to the current block.
 
-The following example shows the parsing rule for bitwise or expressions, which
-adds a new `IR_OP_OR` operation to the current block.
+The following example shows the parsing rule for bitwise or expressions, which adds a new `IR_OP_OR` operation to the current block.
 Logic in `eval_expr` will ensure that the operands `value` and `block->expr` are valid, terminating in case of an error.
 
     static struct block *inclusive_or_expression(
+        struct preprocessor *input,
         struct definition *def,
         struct block *block)
     {
         struct var value;
 
-        block = exclusive_or_expression(def, block);
-        while (peek().token == '|') {
-            consume('|');
+        block = exclusive_or_expression(input, def, block);
+        while (peek(input).token == '|') {
+            consume(input, '|');
             value = eval(def, block, block->expr);
-            block = exclusive_or_expression(def, block);
-            block->expr = eval_expr(def, block, IR_OP_OR, value,
+            block = exclusive_or_expression(input, def, block);
+            block->expr = eval_expr(input, def, block, IR_OP_OR, value,
                 eval(def, block, block->expr));
         }
 

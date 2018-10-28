@@ -7,7 +7,7 @@
  * Parse input for the next function or object definition, or NULL on
  * end of input.
  */
-INTERNAL struct definition *parse(void);
+INTERNAL struct definition *parse(struct preprocessor *input);
 
 /* Create an empty control flow graph.
  *

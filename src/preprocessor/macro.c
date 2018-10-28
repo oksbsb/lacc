@@ -4,6 +4,7 @@
 #endif
 #include "input.h"
 #include "macro.h"
+#include "preprocess.h"
 #include "strtab.h"
 #include "tokenize.h"
 #include <lacc/context.h>
@@ -20,15 +21,6 @@
 #define STR(s) #s
 #define HASH_TABLE_BUCKETS 1024
 
-static struct hash_table macro_hash_table;
-static int new_macro_added;
-
-typedef array_of(String) ExpandStack;
-
-/* Keep track of arrays being recycled. */
-static array_of(TokenArray) arrays;
-static array_of(ExpandStack) stacks;
-
 static int is_expanded(const ExpandStack *scope, String name)
 {
     int i;
@@ -40,11 +32,11 @@ static int is_expanded(const ExpandStack *scope, String name)
     return 0;
 }
 
-INTERNAL TokenArray get_token_array(void)
+INTERNAL TokenArray get_token_array(struct preprocessor *prep)
 {
     TokenArray list = {0};
-    if (array_len(&arrays)) {
-        list = array_pop_back(&arrays);
+    if (array_len(&prep->arrays)) {
+        list = array_pop_back(&prep->arrays);
         array_zero(&list);
         array_empty(&list);
     }
@@ -52,16 +44,16 @@ INTERNAL TokenArray get_token_array(void)
     return list;
 }
 
-INTERNAL void release_token_array(TokenArray list)
+INTERNAL void release_token_array(struct preprocessor *prep, TokenArray list)
 {
-    array_push_back(&arrays, list);
+    array_push_back(&prep->arrays, list);
 }
 
-static ExpandStack get_expand_stack(void)
+static ExpandStack get_expand_stack(struct preprocessor *prep)
 {
     ExpandStack stack = {0};
-    if (array_len(&stacks)) {
-        stack = array_pop_back(&stacks);
+    if (array_len(&prep->stacks)) {
+        stack = array_pop_back(&prep->stacks);
         array_zero(&stack);
         array_empty(&stack);
     }
@@ -69,9 +61,9 @@ static ExpandStack get_expand_stack(void)
     return stack;
 }
 
-static void release_expand_stack(ExpandStack stack)
+static void release_expand_stack(struct preprocessor *prep, ExpandStack stack)
 {
-    array_push_back(&stacks, stack);
+    array_push_back(&prep->stacks, stack);
 }
 
 static int macrocmp(const struct macro *a, const struct macro *b)
@@ -105,7 +97,10 @@ static String macro_hash_key(void *ref)
 static void macro_hash_del(void *ref)
 {
     struct macro *macro = (struct macro *) ref;
-    release_token_array(macro->replacement);
+
+    assert(!macro->is_added);
+    assert(macro->owner);
+    release_token_array(macro->owner, macro->replacement);
     free(macro);
 }
 
@@ -120,63 +115,41 @@ static void *macro_hash_add(void *ref)
      * Signal that the hash table has ownership now, and it will not be
      * freed in define().
      */
-    new_macro_added = 1;
+    assert(!macro->is_added);
+    arg->is_added = 1;
     return macro;
 }
 
-INTERNAL void macro_reset(void)
+INTERNAL void macro_init(struct hash_table *table)
 {
-    static int initialized;
-
-    if (!initialized) {
+    if (table->table) {
+        hash_clear(table);
+    } else {
         hash_init(
-            &macro_hash_table,
+            table,
             HASH_TABLE_BUCKETS,
             macro_hash_key,
             macro_hash_add,
             macro_hash_del);
-        initialized = 1;
-    } else {
-        hash_clear(&macro_hash_table);
     }
 }
 
-INTERNAL void macro_finalize(void)
-{
-    int i;
-    TokenArray list;
-    ExpandStack stack;
-
-    hash_destroy(&macro_hash_table);
-    for (i = 0; i < array_len(&arrays); ++i) {
-        list = array_get(&arrays, i);
-        array_clear(&list);
-    }
-
-    for (i = 0; i < array_len(&stacks); ++i) {
-        stack = array_get(&stacks, i);
-        array_clear(&stack);
-    }
-
-    array_clear(&arrays);
-    array_clear(&stacks);
-}
-
-static struct token get__line__token(void)
+static struct token get__line__token(int line, struct strtab *strtab)
 {
     int len;
     char buf[16];
     struct token t = basic_token[PREP_NUMBER];
 
-    len = sprintf(buf, "%d", current_file_line);
-    t.d.string = str_register(buf, len);
+    len = sprintf(buf, "%d", line);
+    t.d.string = str_register(strtab, buf, len);
     return t;
 }
 
-static struct token get__file__token(void)
+static struct token get__file__token(String file)
 {
     struct token t = {STRING};
-    t.d.string = current_file_path;
+
+    t.d.string = file;
     return t;
 }
 
@@ -184,47 +157,53 @@ static struct token get__file__token(void)
  * Replace __FILE__ with file name, and __LINE__ with line number, by
  * mutating the replacement list on the fly.
  */
-const struct macro *macro_definition(String name)
+const struct macro *macro_definition(struct preprocessor *prep, String name)
 {
     struct macro *ref;
+    struct token t;
+    String file;
+    int line;
 
-    ref = hash_lookup(&macro_hash_table, name);
-    if (ref) {
-        if (ref->is__file__) {
-            array_get(&ref->replacement, 0) = get__file__token();
-        } else if (ref->is__line__) {
-            array_get(&ref->replacement, 0) = get__line__token();
-        }
+    ref = hash_lookup(&prep->macros, name);
+    if (ref && (ref->is__file__ || ref->is__line__)) {
+        assert(prep->input);
+        input_pos(prep->input, &file, &line);
+        t = ref->is__file__
+            ? get__file__token(file)
+            : get__line__token(line, &prep->strtab);
+        array_get(&ref->replacement, 0) = t;
     }
 
     return ref;
 }
 
-INTERNAL void define(struct macro macro)
+INTERNAL void define(struct preprocessor *prep, struct macro macro)
 {
     struct macro *ref;
     static String
         builtin__file__ = SHORT_STRING_INIT("__FILE__"),
         builtin__line__ = SHORT_STRING_INIT("__LINE__");
 
-    new_macro_added = 0;
-    ref = hash_insert(&macro_hash_table, &macro);
+    assert(!macro.owner);
+    assert(!macro.is_added);
+    ref = hash_insert(&prep->macros, &macro);
+    ref->owner = prep;
     if (macrocmp(ref, &macro)) {
-        error("Redefinition of macro '%s' with different substitution.",
+        error(prep, "Redefinition of macro '%s' with different substitution.",
             str_raw(macro.name));
         exit(1);
     } else {
         ref->is__file__ = !str_cmp(builtin__file__, ref->name);
         ref->is__line__ = !str_cmp(builtin__line__, ref->name);
-        if (!new_macro_added) {
-            release_token_array(macro.replacement);
+        if (!macro.is_added) {
+            release_token_array(prep, macro.replacement);
         }
     }
 }
 
-INTERNAL void undef(String name)
+INTERNAL void undef(struct preprocessor *prep, String name)
 {
-    hash_remove(&macro_hash_table, name);
+    hash_remove(&prep->macros, name);
 }
 
 #if !NDEBUG
@@ -260,7 +239,10 @@ void print_token_array(const TokenArray *list)
 }
 #endif
 
-static struct token paste(struct token left, struct token right)
+static struct token paste(
+    struct preprocessor *prep,
+    struct token left,
+    struct token right)
 {
     char *buf;
     const char *endptr;
@@ -276,9 +258,9 @@ static struct token paste(struct token left, struct token right)
     strncpy(buf, str_raw(s1), s1.len);
     strncpy(buf + s1.len, str_raw(s2), s2.len);
 
-    right = tokenize(buf, &endptr);
+    right = tokenize(prep, buf, &endptr);
     if (endptr != buf + s1.len + s2.len) {
-        error("Invalid token resulting from pasting '%s' and '%s'.",
+        error(prep, "Invalid token resulting from pasting '%s' and '%s'.",
             str_raw(s1), str_raw(s2));
         exit(1);
     }
@@ -352,20 +334,21 @@ static void array_replace_slice(
  * further expansion.
  */
 static TokenArray expand_stringify_and_paste(
+    struct preprocessor *prep,
     const struct macro *def,
     TokenArray *args)
 {
     int len, d, i;
     struct token t, s;
-    TokenArray list = get_token_array();
+    TokenArray list = get_token_array(prep);
 
     len = array_len(&def->replacement);
     if (len && array_get(&def->replacement, 0).token == TOKEN_PASTE) {
-        error("Unexpected '##' operator at beginning of line.");
+        error(prep, "Unexpected '##' operator at beginning of line.");
         exit(1);
     } else if (len > 2) {
         if (array_get(&def->replacement, len - 1).token == TOKEN_PASTE) {
-            error("Unexpected '##' operator at end of line.");
+            error(prep, "Unexpected '##' operator at end of line.");
             exit(1);
         }
     }
@@ -397,11 +380,11 @@ static TokenArray expand_stringify_and_paste(
                     d = array_len(&list);
                     array_concat(&list, &args[s.d.val.i]);
                     s = array_get(&args[s.d.val.i], 0);
-                    t = paste(t, s);
+                    t = paste(prep, t, s);
                     array_get(&list, d) = t;
                 }
             } else {
-                t = paste(t, s);
+                t = paste(prep, t, s);
                 array_back(&list) = t;
             }
             break;
@@ -409,10 +392,10 @@ static TokenArray expand_stringify_and_paste(
             i += 1;
             if (peek_token(&def->replacement, i) == PARAM) {
                 d = array_get(&def->replacement, i).d.val.i;
-                t = stringify(&args[d]);
+                t = stringify(prep, &args[d]);
                 array_push_back(&list, t);
             } else {
-                error("Stray '#' in replacement list.");
+                error(prep, "Stray '#' in replacement list.");
                 exit(1);
             }
             break;
@@ -425,9 +408,13 @@ static TokenArray expand_stringify_and_paste(
     return list;
 }
 
-static int expand_line(ExpandStack *scope, TokenArray *list);
+static int expand_line(
+    struct preprocessor *prep,
+    ExpandStack *scope,
+    TokenArray *list);
 
 static TokenArray expand_macro(
+    struct preprocessor *prep,
     ExpandStack *scope,
     const struct macro *def,
     TokenArray *args)
@@ -436,11 +423,11 @@ static TokenArray expand_macro(
     struct token t;
     TokenArray list;
 
-    list = expand_stringify_and_paste(def, args);
+    list = expand_stringify_and_paste(prep, def, args);
     if (def->params > 0) {
         assert(def->type == FUNCTION_LIKE);
         for (i = 0; i < def->params; ++i) {
-            expand(&args[i]);
+            expand(prep, &args[i]);
             if (array_len(&args[i])) {
                 if (!array_get(&args[i], 0).leading_whitespace) {
                     array_get(&args[i], 0).leading_whitespace = 1;
@@ -462,21 +449,24 @@ static TokenArray expand_macro(
         }
 
         for (i = 0; i < def->params; ++i)
-            release_token_array(args[i]);
+            release_token_array(prep, args[i]);
         free(args);
     }
 
-    expand_line(scope, &list);
+    expand_line(prep, scope, &list);
     return list;
 }
 
-static const struct token *skip(const struct token *list, enum token_type token)
+static const struct token *skip(
+    struct preprocessor *prep,
+    const struct token *list,
+    enum token_type token)
 {
     String a, b;
     if (list->token != token) {
         a = basic_token[token].d.string;
         b = list->d.string;
-        error("Expected '%s', but got '%s'.", str_raw(a), str_raw(b));
+        error(prep, "Expected '%s', but got '%s'.", str_raw(a), str_raw(b));
         exit(1);
     }
 
@@ -493,6 +483,7 @@ static const struct token *skip(const struct token *list, enum token_type token)
  * first ')'.
  */
 static TokenArray read_arg(
+    struct preprocessor *prep,
     ExpandStack *scope,
     int is_va_arg,
     const struct token *list,
@@ -500,13 +491,13 @@ static TokenArray read_arg(
 {
     int nesting = 0;
     struct token t;
-    TokenArray arg = get_token_array();
+    TokenArray arg = get_token_array(prep);
 
     while (nesting
         || ((list->token != ',' || is_va_arg) && list->token != ')'))
     {
         if (list->token == NEWLINE) {
-            error("Unexpected end of input in expansion.");
+            error(prep, "Unexpected end of input in expansion.");
             exit(1);
         }
         if (list->token == '(') {
@@ -514,7 +505,7 @@ static TokenArray read_arg(
         } else if (list->token == ')') {
             nesting--;
             if (nesting < 0) {
-                error("Negative nesting depth in expansion.");
+                error(prep, "Negative nesting depth in expansion.");
                 exit(1);
             }
         }
@@ -530,6 +521,7 @@ static TokenArray read_arg(
 }
 
 static TokenArray *read_args(
+    struct preprocessor *prep,
     ExpandStack *scope,
     const struct macro *def,
     const struct token *list,
@@ -539,23 +531,26 @@ static TokenArray *read_args(
     TokenArray *args = NULL;
 
     if (def->type == FUNCTION_LIKE) {
-        list = skip(list, '(');
+        list = skip(prep, list, '(');
         if (def->params) {
             args = malloc(def->params * sizeof(*args));
             for (i = 0; i < def->params - 1; ++i) {
-                args[i] = read_arg(scope, 0, list, &list);
-                list = skip(list, ',');
+                args[i] = read_arg(prep, scope, 0, list, &list);
+                list = skip(prep, list, ',');
             }
-            args[i] = read_arg(scope, def->is_vararg, list, &list);
+            args[i] = read_arg(prep, scope, def->is_vararg, list, &list);
         }
-        list = skip(list, ')');
+        list = skip(prep, list, ')');
     }
 
     *endptr = list;
     return args;
 }
 
-static int expand_line(ExpandStack *scope, TokenArray *list)
+static int expand_line(
+    struct preprocessor *prep,
+    ExpandStack *scope,
+    TokenArray *list)
 {
     int size, i, n;
     struct token t;
@@ -569,7 +564,7 @@ static int expand_line(ExpandStack *scope, TokenArray *list)
             continue;
         }
 
-        def = macro_definition(t.d.string);
+        def = macro_definition(prep, t.d.string);
         if (!def)
             continue;
 
@@ -588,9 +583,9 @@ static int expand_line(ExpandStack *scope, TokenArray *list)
             }
         }
 
-        args = read_args(scope, def, list->data + i + 1, &endptr);
+        args = read_args(prep, scope, def, list->data + i + 1, &endptr);
         array_push_back(scope, def->name);
-        expn = expand_macro(scope, def, args);
+        expn = expand_macro(prep, scope, def, args);
         size = (endptr - list->data) - i;
         (void) array_pop_back(scope);
 
@@ -602,20 +597,20 @@ static int expand_line(ExpandStack *scope, TokenArray *list)
         /* Squeeze in expansion in list. */
         array_replace_slice(list, i, size, &expn);
         i += array_len(&expn) - 1;
-        release_token_array(expn);
+        release_token_array(prep, expn);
         n += 1;
     }
 
     return n;
 }
 
-INTERNAL int expand(TokenArray *list)
+INTERNAL int expand(struct preprocessor *prep, TokenArray *list)
 {
     int n;
-    ExpandStack stack = get_expand_stack();
+    ExpandStack stack = get_expand_stack(prep);
 
-    n = expand_line(&stack, list);
-    release_expand_stack(stack);
+    n = expand_line(prep, &stack, list);
+    release_expand_stack(prep, stack);
     return n;
 }
 
@@ -710,7 +705,9 @@ static char *stringify_concat(
  * - Any sequence of whitespace in the middle of the text is converted
  *   to a single space in the stringified result.
  */
-INTERNAL struct token stringify(const TokenArray *list)
+INTERNAL struct token stringify(
+    struct preprocessor *prep,
+    const TokenArray *list)
 {
     struct token str = {0}, t;
     size_t cap, ptr;
@@ -753,11 +750,11 @@ INTERNAL struct token stringify(const TokenArray *list)
                 }
             }
             if (ptr > 0 && buf[ptr - 1] == '\\') {
-                error("Invalid string literal ending with '\\'.");
+                error(prep, "Invalid string literal ending with '\\'.");
                 exit(1);
             }
             str.leading_whitespace = array_get(list, 0).leading_whitespace;
-            str.d.string = str_register(buf, ptr);
+            str.d.string = str_register(&prep->strtab, buf, ptr);
             free(buf);
             break;
         }
@@ -766,18 +763,18 @@ INTERNAL struct token stringify(const TokenArray *list)
     return str;
 }
 
-static TokenArray parse_string(const char *str)
+static TokenArray parse_string(struct preprocessor *prep, const char *str)
 {
     const char *endptr;
     struct token param = {PARAM};
-    TokenArray arr = get_token_array();
+    TokenArray arr = get_token_array(prep);
 
     while (*str) {
         if (*str == '@') {
             array_push_back(&arr, param);
             str++;
         } else {
-            array_push_back(&arr, tokenize(str, &endptr));
+            array_push_back(&arr, tokenize(prep, str, &endptr));
             assert(str != endptr);
             str = endptr;
         }
@@ -786,13 +783,16 @@ static TokenArray parse_string(const char *str)
     return arr;
 }
 
-static void register_macro(const char *key, const char *value)
+static void register_macro(
+    struct preprocessor *prep,
+    const char *key,
+    const char *value)
 {
     struct macro macro = {{{0}}, OBJECT_LIKE};
 
     macro.name = str_init(key);
-    macro.replacement = parse_string(value);
-    define(macro);
+    macro.replacement = parse_string(prep, value);
+    define(prep, macro);
 }
 
 static char *get__time__(char *ts)
@@ -825,42 +825,44 @@ static char *get__date__(char *ts)
  * like "Sun Feb 19 01:26:43 2017\n". In this case, __DATE__ will be
  * "Feb 19 2017", and __TIME__ is "01:26:43".
  */
-INTERNAL void register_builtin_definitions(enum cstd version)
+INTERNAL void register_builtin_definitions(
+    struct preprocessor *prep,
+    enum cstd version)
 {
     time_t timestamp = time(NULL);
     char *ts = ctime(&timestamp);
 
-    register_macro("__STDC__", "1");
-    register_macro("__STDC_HOSTED__", "1");
-    register_macro("__FILE__", "0");
-    register_macro("__LINE__", "0");
-    register_macro("__DATE__", get__date__(ts));
-    register_macro("__TIME__", get__time__(ts));
-    register_macro("__x86_64__", "1");
-    register_macro("__LP64__", "1");
-    register_macro("__SIZE_TYPE__", "unsigned long");
-    register_macro("__WCHAR_TYPE__", "signed int");
-    register_macro("__PTRDIFF_TYPE__", "signed long");
-    register_macro("__CHAR_BIT__", "8");
-    register_macro("__SIZEOF_LONG__", "8");
-    register_macro("__SIZEOF_POINTER__", "8");
+    register_macro(prep, "__STDC__", "1");
+    register_macro(prep, "__STDC_HOSTED__", "1");
+    register_macro(prep, "__FILE__", "0");
+    register_macro(prep, "__LINE__", "0");
+    register_macro(prep, "__DATE__", get__date__(ts));
+    register_macro(prep, "__TIME__", get__time__(ts));
+    register_macro(prep, "__x86_64__", "1");
+    register_macro(prep, "__LP64__", "1");
+    register_macro(prep, "__SIZE_TYPE__", "unsigned long");
+    register_macro(prep, "__WCHAR_TYPE__", "signed int");
+    register_macro(prep, "__PTRDIFF_TYPE__", "signed long");
+    register_macro(prep, "__CHAR_BIT__", "8");
+    register_macro(prep, "__SIZEOF_LONG__", "8");
+    register_macro(prep, "__SIZEOF_POINTER__", "8");
 
 #ifdef __linux__
-    register_macro("__linux__", XSTR(__linux__));
-    register_macro("__signed__", "signed");
+    register_macro(prep, "__linux__", XSTR(__linux__));
+    register_macro(prep, "__signed__", "signed");
 #endif
 #ifdef __unix__
-    register_macro("__unix__", XSTR(__unix__));
+    register_macro(prep, "__unix__", XSTR(__unix__));
 #endif
 #ifdef __OpenBSD__
-    register_macro("__OpenBSD__", XSTR(__OpenBSD__));
+    register_macro(prep, "__OpenBSD__", XSTR(__OpenBSD__));
     if (version == STD_C89) {
-        register_macro("__restrict", "");
-        register_macro("__restrict__", "");
-        register_macro("__ISO_C_VISIBLE", "1990");
+        register_macro(prep, "__restrict", "");
+        register_macro(prep, "__restrict__", "");
+        register_macro(prep, "__ISO_C_VISIBLE", "1990");
     } else {
-        register_macro("__restrict", "restrict");
-        register_macro("__restrict__", "restrict");
+        register_macro(prep, "__restrict", "restrict");
+        register_macro(prep, "__restrict__", "restrict");
     }
 #endif
 
@@ -868,10 +870,10 @@ INTERNAL void register_builtin_definitions(enum cstd version)
     case STD_C89:
         break;
     case STD_C99:
-        register_macro("__STDC_VERSION__", "199901L");
+        register_macro(prep, "__STDC_VERSION__", "199901L");
         break;
     case STD_C11:
-        register_macro("__STDC_VERSION__", "201112L");
+        register_macro(prep, "__STDC_VERSION__", "201112L");
         break;
     }
 }

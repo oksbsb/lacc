@@ -450,14 +450,14 @@ static int parse_program_arguments(int argc, char *argv[])
     return 0;
 }
 
-static void register_argument_definitions(void)
+static void register_argument_definitions(struct preprocessor *prep)
 {
     int i;
     char *line;
 
     for (i = 0; i < array_len(&predefined_macros); ++i) {
         line = array_get(&predefined_macros, i);
-        inject_line(line);
+        inject_line(prep, line);
     }
 }
 
@@ -465,13 +465,14 @@ static void register_argument_definitions(void)
  * Register compiler internal builtin symbols, that are assumed to
  * exists by standard library headers.
  */
-static void register_builtin_declarations(void)
+static void register_builtin_declarations(struct preprocessor *prep)
 {
-    inject_line("void *memcpy(void *dest, const void *src, unsigned long n);");
-    inject_line("void __builtin_alloca(unsigned long);");
-    inject_line("void __builtin_va_start(void);");
-    inject_line("void __builtin_va_arg(void);");
-    inject_line(
+    inject_line(prep,
+        "void *memcpy(void *dest, const void *src, unsigned long n);");
+    inject_line(prep, "void __builtin_alloca(unsigned long);");
+    inject_line(prep, "void __builtin_va_start(void);");
+    inject_line(prep, "void __builtin_va_arg(void);");
+    inject_line(prep,
         "typedef struct {"
         "   unsigned int gp_offset;"
         "   unsigned int fp_offset;"
@@ -498,12 +499,13 @@ static int process_file(struct input_file file)
 {
     FILE *output;
     struct definition *def;
+    struct input *input;
+    struct preprocessor prep = {0};
     const struct symbol *sym;
 
-    preprocess_reset();
-    set_input_file(file.name);
-    register_builtin_definitions(context.standard);
-    register_argument_definitions();
+    input = input_open(file.name);
+    preprocess_init(&prep, input);
+    register_argument_definitions(&prep);
     if (file.output_name) {
         output = fopen(file.output_name, "w");
         if (!output) {
@@ -516,18 +518,17 @@ static int process_file(struct input_file file)
     }
 
     if (context.target == TARGET_PREPROCESS) {
-        preprocess(output);
+        preprocess(&prep, output);
     } else {
         set_compile_target(output, file.name);
         push_scope(&ns_ident);
         push_scope(&ns_tag);
-        register_builtin_declarations();
+        register_builtin_declarations(&prep);
         push_optimization(optimization_level);
 
-        while ((def = parse()) != NULL) {
-            if (context.errors) {
-                error("Aborting because of previous %s.",
-                    (context.errors > 1) ? "errors" : "error");
+        while ((def = parse(&prep)) != NULL) {
+            if (prep.errors) {
+                fprintf(stderr, "Aborting because of previous errors.\n");
                 break;
             }
 
@@ -551,11 +552,13 @@ static int process_file(struct input_file file)
         pop_scope(&ns_ident);
     }
 
+    input_close(input);
     if (output != stdout) {
         fclose(output);
     }
 
-    return context.errors;
+    preprocess_finalize(&prep);
+    return prep.errors;
 }
 
 int main(int argc, char *argv[])
@@ -582,7 +585,7 @@ int main(int argc, char *argv[])
 end:
     finalize();
     parse_finalize();
-    preprocess_finalize();
+    input_finalize();
     clear_predefined_macros();
     clear_input_files();
     clear_linker_args();

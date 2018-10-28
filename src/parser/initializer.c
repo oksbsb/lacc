@@ -13,6 +13,7 @@
 #include <assert.h>
 
 static struct block *initialize_member(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct block *values,
@@ -34,6 +35,7 @@ static struct block *get_initializer_block(int i)
 }
 
 static struct block *read_initializer_element(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct var target)
@@ -44,7 +46,7 @@ static struct block *read_initializer_element(
 
     ops = array_len(&block->code);
     top = block;
-    block = assignment_expression(def, block);
+    block = assignment_expression(input, def, block);
     value = block->expr.l;
 
     if (target.symbol->linkage != LINK_NONE) {
@@ -55,7 +57,7 @@ static struct block *read_initializer_element(
                 && !(value.kind == DIRECT
                     && (is_function(value.type) || is_array(value.type)))))
         {
-            error("Initializer must be computable at load time.");
+            error(input, "Initializer must be computable at load time.");
             exit(1);
         }
     }
@@ -69,11 +71,13 @@ enum current_object_state {
     MEMBER
 };
 
-static int next_element(enum current_object_state state)
+static int next_element(
+    struct preprocessor *input,
+    enum current_object_state state)
 {
-    struct token t = peek();
+    struct token t = peek(input);
     if (t.token == ',') {
-        switch (peekn(2).token) {
+        switch (peekn(input, 2).token) {
         case '}':
             break;
         case '.':
@@ -81,7 +85,7 @@ static int next_element(enum current_object_state state)
                 break;
             }
         default:
-            next();
+            next(input);
             return 1;
         }
     }
@@ -102,6 +106,7 @@ static struct var access_member(
 }
 
 static const struct member *get_named_member(
+    struct preprocessor *input,
     Type type,
     String name,
     int *i)
@@ -110,7 +115,7 @@ static const struct member *get_named_member(
 
     member = find_type_member(type, name, i);
     if (member == NULL) {
-        error("%t has no member named %s.", type, str_raw(name));
+        error(input, "%t has no member named %s.", type, str_raw(name));
         exit(1);
     }
 
@@ -137,6 +142,7 @@ static const struct member *get_named_member(
  * though the assignment to .q does not overwrite it.
  */
 static struct block *initialize_union(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct block *values,
@@ -158,22 +164,22 @@ static struct block *initialize_union(
     assert(nmembers(type) > 0);
 
     do {
-        if (peek().token == '.') {
-            next();
-            name = consume(IDENTIFIER).d.string;
-            member = get_named_member(type, name, NULL);
+        if (peek(input).token == '.') {
+            next(input);
+            name = consume(input, IDENTIFIER).d.string;
+            member = get_named_member(input, type, name, NULL);
             target = access_member(target, member, filled);
-            if (peek().token == '=') {
-                next();
+            if (peek(input).token == '=') {
+                next(input);
             }
         } else if (!done) {
             member = get_member(type, 0);
             target = access_member(target, member, filled);
         } else break;
         array_empty(&init->code);
-        block = initialize_member(def, block, init, target);
+        block = initialize_member(input, def, block, init, target);
         done = 1;
-    } while (next_element(state));
+    } while (next_element(input, state));
 
     array_concat(&values->code, &init->code);
     return block;
@@ -187,6 +193,7 @@ static struct block *initialize_union(
  * all consecutive elements with the same offset.
  */
 static struct block *initialize_struct(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct block *values,
@@ -209,15 +216,15 @@ static struct block *initialize_struct(
     m = nmembers(type);
     i = 0;
     do {
-        if (peek().token == '.') {
-            next();
-            name = consume(IDENTIFIER).d.string;
-            member = get_named_member(type, name, &i);
+        if (peek(input).token == '.') {
+            next(input);
+            name = consume(input, IDENTIFIER).d.string;
+            member = get_named_member(input, type, name, &i);
             target = access_member(target, member, filled);
-            if (peek().token == '=') {
-                next();
+            if (peek(input).token == '=') {
+                next(input);
             }
-            block = initialize_member(def, block, values, target);
+            block = initialize_member(input, def, block, values, target);
             prev = member;
             i += 1;
         } else {
@@ -231,16 +238,17 @@ static struct block *initialize_struct(
             }
             prev = member;
             target = access_member(target, member, filled);
-            block = initialize_member(def, block, values, target);
+            block = initialize_member(input, def, block, values, target);
             if (i >= m)
                 break;
         }
-    } while (next_element(state));
+    } while (next_element(input, state));
 
     return block;
 }
 
 static struct block *initialize_struct_or_union(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct block *values,
@@ -251,19 +259,21 @@ static struct block *initialize_struct_or_union(
     assert(nmembers(target.type) > 0);
 
     if (is_union(target.type)) {
-        block = initialize_union(def, block, values, target, state);
+        block = initialize_union(input, def, block, values, target, state);
     } else {
-        block = initialize_struct(def, block, values, target, state);
+        block = initialize_struct(input, def, block, values, target, state);
     }
 
     return block;
 }
 
-static int next_array_element(enum current_object_state state)
+static int next_array_element(
+    struct preprocessor *input,
+    enum current_object_state state)
 {
-    struct token t = peek();
+    struct token t = peek(input);
     if (t.token == ',') {
-        t = peekn(2);
+        t = peekn(input, 2);
         switch (t.token) {
         case '}':
         case '.':
@@ -273,7 +283,7 @@ static int next_array_element(enum current_object_state state)
                 break;
             }
         default:
-            next();
+            next(input);
             return 1;
         }
     }
@@ -281,18 +291,18 @@ static int next_array_element(enum current_object_state state)
     return 0;
 }
 
-static int try_parse_index(size_t *index)
+static int try_parse_index(struct preprocessor *input, size_t *index)
 {
     struct var num;
 
-    if (peek().token == '[') {
-        next();
-        num = constant_expression();
+    if (peek(input).token == '[') {
+        next(input);
+        num = constant_expression(input);
         if (!is_integer(num.type)) {
-            error("Array designator must have integer value.");
+            error(input, "Array designator must have integer value.");
             exit(1);
         }
-        consume(']');
+        consume(input, ']');
         *index = num.imm.i;
         return 1;
     }
@@ -321,6 +331,7 @@ static int try_parse_index(size_t *index)
  *      foo[4] = 0
  */
 static struct block *initialize_array(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct block *values,
@@ -343,25 +354,25 @@ static struct block *initialize_array(
      * Need to read expression to determine if element is a string
      * constant, or an integer like "Hello"[2].
      */
-    if (is_char(elem) && peek().token != '[') {
-        block = read_initializer_element(def, block, target);
+    if (is_char(elem) && peek(input).token != '[') {
+        block = read_initializer_element(input, def, block, target);
         if (is_identity(block->expr) && is_string(block->expr.l)) {
-            target = eval_assign(def, values, target, block->expr);
+            target = eval_assign(input, def, values, target, block->expr);
         } else {
             target.type = elem;
-            eval_assign(def, values, target, block->expr);
+            eval_assign(input, def, values, target, block->expr);
             goto next;
         }
     } else {
         target.type = elem;
         do {
-            if (try_parse_index(&i) && peek().token == '=') {
-                next();
+            if (try_parse_index(input, &i) && peek(input).token == '=') {
+                next(input);
             }
             target.offset = initial + (i * width);
-            block = initialize_member(def, block, values, target);
+            block = initialize_member(input, def, block, values, target);
 next:       i += 1;
-        } while (next_array_element(state));
+        } while (next_array_element(input, state));
     }
 
     if (!size_of(type)) {
@@ -374,6 +385,7 @@ next:       i += 1;
 }
 
 static struct block *initialize_member(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct block *values,
@@ -381,44 +393,45 @@ static struct block *initialize_member(
 {
     assert(target.kind == DIRECT);
     if (is_struct_or_union(target.type)) {
-        if (peek().token == '{') {
-            next();
-            block = initialize_struct_or_union(def, block, values, target, CURRENT);
-            if (peek().token == ',')
-                next();
-            consume('}');
+        if (peek(input).token == '{') {
+            next(input);
+            block = initialize_struct_or_union(input, def, block, values, target, CURRENT);
+            if (peek(input).token == ',')
+                next(input);
+            consume(input, '}');
         } else {
-            block = initialize_struct_or_union(def, block, values, target, DESIGNATOR);
+            block = initialize_struct_or_union(input, def, block, values, target, DESIGNATOR);
         }
     } else if (is_array(target.type)) {
         if (!size_of(target.type)) {
-            error("Invalid initialization of flexible array member.");
+            error(input, "Invalid initialization of flexible array member.");
             exit(1);
         }
-        if (peek().token == '{') {
-            next();
-            block = initialize_array(def, block, values, target, CURRENT);
-            if (peek().token == ',')
-                next();
-            consume('}');
+        if (peek(input).token == '{') {
+            next(input);
+            block = initialize_array(input, def, block, values, target, CURRENT);
+            if (peek(input).token == ',')
+                next(input);
+            consume(input, '}');
         } else {
-            block = initialize_array(def, block, values, target, DESIGNATOR);
+            block = initialize_array(input, def, block, values, target, DESIGNATOR);
         }
     } else {
-        if (peek().token == '{') {
-            next();
-            block = read_initializer_element(def, block, target);
-            consume('}');
+        if (peek(input).token == '{') {
+            next(input);
+            block = read_initializer_element(input, def, block, target);
+            consume(input, '}');
         } else {
-            block = read_initializer_element(def, block, target);
+            block = read_initializer_element(input, def, block, target);
         }
-        eval_assign(def, values, target, block->expr);
+        eval_assign(input, def, values, target, block->expr);
     }
 
     return block;
 }
 
 static struct block *initialize_object(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     struct block *values,
@@ -426,24 +439,24 @@ static struct block *initialize_object(
 {
     assert(target.kind == DIRECT);
 
-    if (peek().token == '{') {
-        next();
+    if (peek(input).token == '{') {
+        next(input);
         if (is_struct_or_union(target.type)) {
-            block = initialize_struct_or_union(def, block, values, target, CURRENT);
+            block = initialize_struct_or_union(input, def, block, values, target, CURRENT);
         } else if (is_array(target.type)) {
-            block = initialize_array(def, block, values, target, CURRENT);
+            block = initialize_array(input, def, block, values, target, CURRENT);
         } else {
-            block = initialize_object(def, block, values, target);
+            block = initialize_object(input, def, block, values, target);
         }
-        if (peek().token == ',') {
-            next();
+        if (peek(input).token == ',') {
+            next(input);
         }
-        consume('}');
+        consume(input, '}');
     } else if (is_array(target.type)) {
-        block = initialize_array(def, block, values, target, MEMBER);
+        block = initialize_array(input, def, block, values, target, MEMBER);
     } else {
-        block = read_initializer_element(def, block, target);
-        eval_assign(def, values, target, block->expr);
+        block = read_initializer_element(input, def, block, target);
+        eval_assign(input, def, values, target, block->expr);
     }
 
     return block;
@@ -496,10 +509,10 @@ static void zero_initialize(
     case T_POINTER:
         var = var__immediate_zero;
         var.type = target.type;
-        eval_assign(def, values, target, as_expr(var));
+        eval_assign(NULL, def, values, target, as_expr(var));
         break;
     default:
-        error("Cannot zero-initialize object of type '%t'.", target.type);
+        error(NULL, "Cannot zero-initialize object of type '%t'.", target.type);
         exit(1);
     }
 }
@@ -749,6 +762,7 @@ static struct block *postprocess_object_initialization(
 }
 
 INTERNAL struct block *initializer(
+    struct preprocessor *input,
     struct definition *def,
     struct block *block,
     const struct symbol *sym)
@@ -756,14 +770,14 @@ INTERNAL struct block *initializer(
     struct block *values = get_initializer_block(0);
     struct var target = var_direct(sym);
 
-    if (peek().token == '{' || is_array(sym->type)) {
-        block = initialize_object(def, block, values, target);
+    if (peek(input).token == '{' || is_array(sym->type)) {
+        block = initialize_object(input, def, block, values, target);
         values = postprocess_object_initialization(def, values, target);
         array_concat(&block->code, &values->code);
         array_empty(&values->code);
     } else {
-        block = read_initializer_element(def, block, target);
-        eval_assign(def, block, target, block->expr);
+        block = read_initializer_element(input, def, block, target);
+        eval_assign(input, def, block, target, block->expr);
     }
 
     return block;

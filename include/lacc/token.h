@@ -167,16 +167,18 @@ struct token {
     } d;
 };
 
+struct preprocessor;
+
 /* Peek lookahead of 1. */
-INTERNAL struct token peek(void);
+INTERNAL struct token peek(struct preprocessor *input);
 
 /* Peek lookahead of n. */
-INTERNAL struct token peekn(int n);
+INTERNAL struct token peekn(struct preprocessor *input, int n);
 
 /* Consume and return next token. */
-INTERNAL struct token next(void);
+INTERNAL struct token next(struct preprocessor *input);
 
 /* Consume and return next token, or fail of not of expected type. */
-INTERNAL struct token consume(enum token_type type);
+INTERNAL struct token consume(struct preprocessor *input, enum token_type type);
 
 #endif

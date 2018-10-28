@@ -17,6 +17,7 @@
  * enclosed initializer list.
  */
 INTERNAL struct block *initializer(
+	struct preprocessor *input,
     struct definition *def,
     struct block *block,
     const struct symbol *sym);

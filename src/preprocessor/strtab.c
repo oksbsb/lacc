@@ -3,7 +3,6 @@
 # define EXTERNAL extern
 #endif
 #include "strtab.h"
-#include <lacc/hash.h>
 
 #include <assert.h>
 #include <ctype.h>
@@ -11,14 +10,6 @@
 #include <string.h>
 
 #define STRTAB_SIZE 1024
-
-static struct hash_table strtab;
-
-/* Buffer used to concatenate strings before registering them. */
-static char *catbuf;
-static size_t catlen;
-
-static int initialized;
 
 /*
  * Every unique string encountered, being identifiers or literals, is
@@ -52,19 +43,31 @@ static String str_hash_key(void *ref)
     return *str;
 }
 
-INTERNAL void strtab_reset(void)
+INTERNAL void strtab_init(struct strtab *strtab)
 {
-    if (initialized) {
-        hash_destroy(&strtab);
-        initialized = 0;
+    if (strtab->tab.table) {
+        hash_clear(&strtab->tab);
+    } else {
+        hash_init(
+            &strtab->tab,
+            STRTAB_SIZE,
+            str_hash_key,
+            str_hash_add,
+            free);
     }
-
-    free(catbuf);
-    catbuf = NULL;
-    catlen = 0;
 }
 
-INTERNAL String str_register(const char *str, size_t len)
+INTERNAL void strtab_destroy(struct strtab *strtab)
+{
+    free(strtab->catbuf);
+    hash_destroy(&strtab->tab);
+    memset(strtab, 0, sizeof(*strtab));
+}
+
+INTERNAL String str_register(
+    struct strtab *strtab,
+    const char *str,
+    size_t len)
 {
     String data = {0}, *ref;
     assert(len >= 0);
@@ -74,34 +77,25 @@ INTERNAL String str_register(const char *str, size_t len)
         data.a.len = len;
         ref = &data;
     } else {
-        if (!initialized) {
-            hash_init(
-                &strtab,
-                STRTAB_SIZE,
-                str_hash_key,
-                str_hash_add,
-                free);
-            initialized = 1;
-        }
         data.p.str = str;
         data.p.len = len;
-        ref = hash_insert(&strtab, &data);
+        ref = hash_insert(&strtab->tab, &data);
     }
 
     return *ref;
 }
 
-INTERNAL String str_cat(String a, String b)
+INTERNAL String str_cat(struct strtab *strtab, String a, String b)
 {
     size_t len;
 
     len = a.len + b.len;
-    if (len > catlen) {
-        catlen = len;
-        catbuf = realloc(catbuf, catlen);
+    if (len > strtab->catlen) {
+        strtab->catlen = len;
+        strtab->catbuf = realloc(strtab->catbuf, strtab->catlen);
     }
 
-    memcpy(catbuf, str_raw(a), a.len);
-    memcpy(catbuf + a.len, str_raw(b), b.len);
-    return str_register(catbuf, len);
+    memcpy(strtab->catbuf, str_raw(a), a.len);
+    memcpy(strtab->catbuf + a.len, str_raw(b), b.len);
+    return str_register(strtab, strtab->catbuf, len);
 }

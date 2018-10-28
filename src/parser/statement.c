@@ -71,6 +71,7 @@ static void free_switch_context(struct switch_context *ctx)
 }
 
 static struct block *if_statement(
+    struct preprocessor *input,
     struct definition *def,
     struct block *parent)
 {
@@ -78,16 +79,16 @@ static struct block *if_statement(
         *right = cfg_block_init(def), *left,
         *next  = cfg_block_init(def);
 
-    consume(IF);
-    consume('(');
-    parent = expression(def, parent);
+    consume(input, IF);
+    consume(input, '(');
+    parent = expression(input, def, parent);
     if (!is_scalar(parent->expr.type)) {
-        error("If expression must have scalar type, was %t.",
+        error(input, "If expression must have scalar type, was %t.",
             parent->expr.type);
         exit(1);
     }
 
-    consume(')');
+    consume(input, ')');
     if (is_immediate_true(parent->expr)) {
         parent->jump[0] = right;
     } else if (is_immediate_false(parent->expr)) {
@@ -97,10 +98,10 @@ static struct block *if_statement(
         parent->jump[1] = right;
     }
 
-    right = statement(def, right);
+    right = statement(input, def, right);
     right->jump[0] = next;
-    if (peek().token == ELSE) {
-        consume(ELSE);
+    if (peek(input).token == ELSE) {
+        consume(input, ELSE);
         left = cfg_block_init(def);
         if (!is_immediate_true(parent->expr)) {
             /*
@@ -110,7 +111,7 @@ static struct block *if_statement(
              */
             parent->jump[0] = left;
         }
-        left = statement(def, left);
+        left = statement(input, def, left);
         left->jump[0] = next;
     }
 
@@ -118,6 +119,7 @@ static struct block *if_statement(
 }
 
 static struct block *do_statement(
+    struct preprocessor *input,
     struct definition *def,
     struct block *parent)
 {
@@ -136,19 +138,19 @@ static struct block *do_statement(
     set_continue_target(old_continue_target, cond);
     parent->jump[0] = top;
 
-    consume(DO);
-    body = statement(def, top);
+    consume(input, DO);
+    body = statement(input, def, top);
     body->jump[0] = cond;
-    consume(WHILE);
-    consume('(');
-    tail = expression(def, cond);
+    consume(input, WHILE);
+    consume(input, '(');
+    tail = expression(input, def, cond);
     if (!is_scalar(tail->expr.type)) {
-        error("While expression must have scalar type, was %t.",
+        error(input, "While expression must have scalar type, was %t.",
             tail->expr.type);
         exit(1);
     }
 
-    consume(')');
+    consume(input, ')');
     if (is_immediate_true(tail->expr)) {
         tail->jump[0] = top;
     } else if (is_immediate_false(tail->expr)) {
@@ -164,6 +166,7 @@ static struct block *do_statement(
 }
 
 static struct block *while_statement(
+    struct preprocessor *input,
     struct definition *def,
     struct block *parent)
 {
@@ -181,16 +184,16 @@ static struct block *while_statement(
     set_continue_target(old_continue_target, top);
     parent->jump[0] = top;
 
-    consume(WHILE);
-    consume('(');
-    cond = expression(def, top);
+    consume(input, WHILE);
+    consume(input, '(');
+    cond = expression(input, def, top);
     if (!is_scalar(cond->expr.type)) {
-        error("While expression must have scalar type, was %t.",
+        error(input, "While expression must have scalar type, was %t.",
             cond->expr.type);
         exit(1);
     }
 
-    consume(')');
+    consume(input, ')');
     if (is_immediate_true(cond->expr)) {
         cond->jump[0] = body;
     } else if (is_immediate_false(cond->expr)) {
@@ -200,7 +203,7 @@ static struct block *while_statement(
         cond->jump[1] = body;
     }
 
-    body = statement(def, body);
+    body = statement(input, def, body);
     body->jump[0] = top;
 
     restore_break_target(old_break_target);
@@ -209,6 +212,7 @@ static struct block *while_statement(
 }
 
 static struct block *for_statement(
+    struct preprocessor *input,
     struct definition *def,
     struct block *parent)
 {
@@ -228,33 +232,34 @@ static struct block *for_statement(
     set_break_target(old_break_target, next);
 
     declared = 0;
-    consume(FOR);
-    consume('(');
-    switch ((tok = peek()).token) {
+    consume(input, FOR);
+    consume(input, '(');
+    switch ((tok = peek(input)).token) {
     case IDENTIFIER:
         sym = sym_lookup(&ns_ident, tok.d.string);
         if (!sym || sym->symtype != SYM_TYPEDEF) {
-            parent = expression(def, parent);
-            consume(';');
+            parent = expression(input, def, parent);
+            consume(input, ';');
             break;
         }
     case FIRST(type_name):
         declared = 1;
         push_scope(&ns_ident);
-        parent = declaration(def, parent);
+        parent = declaration(input, def, parent);
         break;
     default:
-        parent = expression(def, parent);
+        parent = expression(input, def, parent);
     case ';':
-        consume(';');
+        consume(input, ';');
         break;
     }
 
-    if (peek().token != ';') {
+    if (peek(input).token != ';') {
         parent->jump[0] = top;
-        top = expression(def, top);
+        top = expression(input, def, top);
         if (!is_scalar(top->expr.type)) {
-            error("Controlling expression must have scalar type, was %t.",
+            error(input,
+                "Controlling expression must have scalar type, was %t.",
                 top->expr.type);
             exit(1);
         }
@@ -275,17 +280,17 @@ static struct block *for_statement(
         top = body;
     }
 
-    consume(';');
-    if (peek().token != ')') {
-        expression(def, increment)->jump[0] = top;
-        consume(')');
+    consume(input, ';');
+    if (peek(input).token != ')') {
+        expression(input, def, increment)->jump[0] = top;
+        consume(input, ')');
         set_continue_target(old_continue_target, increment);
-        body = statement(def, body);
+        body = statement(input, def, body);
         body->jump[0] = increment;
     } else {
-        consume(')');
+        consume(input, ')');
         set_continue_target(old_continue_target, top);
-        body = statement(def, body);
+        body = statement(input, def, body);
         body->jump[0] = top;
     }
 
@@ -299,6 +304,7 @@ static struct block *for_statement(
 }
 
 static struct block *switch_statement(
+    struct preprocessor *input,
     struct definition *def,
     struct block *parent)
 {
@@ -319,16 +325,16 @@ static struct block *switch_statement(
     old_switch_ctx = switch_context;
     switch_context = calloc(1, sizeof(*switch_context));
 
-    consume(SWITCH);
-    consume('(');
-    parent = expression(def, parent);
+    consume(input, SWITCH);
+    consume(input, '(');
+    parent = expression(input, def, parent);
     if (!is_integer(parent->expr.type)) {
-        error("Switch expression must have integer type, was %t.",
+        error(input, "Switch expression must have integer type, was %t.",
             parent->expr.type);
         exit(1);
     }
-    consume(')');
-    last = statement(def, body);
+    consume(input, ')');
+    last = statement(input, def, body);
     last->jump[0] = next;
 
     if (!array_len(&switch_context->cases) && !switch_context->default_label) {
@@ -340,7 +346,7 @@ static struct block *switch_statement(
             sc = array_get(&switch_context->cases, i);
             cond = cfg_block_init(def);
             value = eval(def, parent, parent->expr);
-            cond->expr = eval_expr(def, cond, IR_OP_EQ, sc.value, value);
+            cond->expr = eval_expr(input, def, cond, IR_OP_EQ, sc.value, value);
             cond->jump[1] = sc.label;
             prev_cond->jump[0] = cond;
         }
@@ -355,35 +361,39 @@ static struct block *switch_statement(
     return next;
 }
 
-INTERNAL struct block *statement(struct definition *def, struct block *parent)
+INTERNAL struct block *statement(
+    struct preprocessor *input,
+    struct definition *def,
+    struct block *parent)
 {
     struct symbol *sym;
     struct token tok;
 
-    switch ((tok = peek()).token) {
+    switch ((tok = peek(input)).token) {
     case ';':
-        consume(';');
+        consume(input, ';');
         break;
     case '{':
-        parent = block(def, parent);
+        parent = block(input, def, parent);
         break;
     case IF:
-        parent = if_statement(def, parent);
+        parent = if_statement(input, def, parent);
         break;
     case DO:
-        parent = do_statement(def, parent);
-        consume(';');
+        parent = do_statement(input, def, parent);
+        consume(input, ';');
         break;
     case WHILE:
-        parent = while_statement(def, parent);
+        parent = while_statement(input, def, parent);
         break;
     case FOR:
-        parent = for_statement(def, parent);
+        parent = for_statement(input, def, parent);
         break;
     case GOTO:
-        consume(GOTO);
-        tok = consume(IDENTIFIER);
+        consume(input, GOTO);
+        tok = consume(input, IDENTIFIER);
         sym = sym_add(
+            input,
             &ns_label,
             tok.d.string,
             basic_type__void,
@@ -394,65 +404,68 @@ INTERNAL struct block *statement(struct definition *def, struct block *parent)
         }
         parent->jump[0] = sym->value.label;
         parent = cfg_block_init(def); /* Orphan, unless labeled. */
-        consume(';');
+        consume(input, ';');
         break;
     case CONTINUE:
     case BREAK:
-        next();
+        next(input);
         parent->jump[0] =
             (tok.token == CONTINUE) ? continue_target : break_target;
-        consume(';');
+        consume(input, ';');
         parent = cfg_block_init(def); /* Orphan, unless labeled. */
         break;
     case RETURN:
-        consume(RETURN);
+        consume(input, RETURN);
         if (!is_void(type_next(def->symbol->type))) {
-            parent = expression(def, parent);
-            parent->expr = eval_return(def, parent);
+            parent = expression(input, def, parent);
+            parent->expr = eval_return(input, def, parent);
         }
-        consume(';');
+        consume(input, ';');
         parent = cfg_block_init(def); /* Orphan, unless labeled. */
         break;
     case SWITCH:
-        parent = switch_statement(def, parent);
+        parent = switch_statement(input, def, parent);
         break;
     case CASE:
-        consume(CASE);
+        consume(input, CASE);
         if (!switch_context) {
-            error("Stray 'case' label, must be inside a switch statement.");
+            error(input,
+                "Stray 'case' label, must be inside a switch statement.");
         } else {
             struct block *next = cfg_block_init(def);
-            struct var expr = constant_expression();
-            consume(':');
+            struct var expr = constant_expression(input);
+            consume(input, ':');
             add_switch_case(next, expr);
             parent->jump[0] = next;
-            next = statement(def, next);
+            next = statement(input, def, next);
             parent = next;
         }
         break;
     case DEFAULT:
-        consume(DEFAULT);
-        consume(':');
+        consume(input, DEFAULT);
+        consume(input, ':');
         if (!switch_context) {
-            error("Stray 'default' label, must be inside a switch statement.");
+            error(input,
+                "Stray 'default' label, must be inside a switch statement.");
         } else if (switch_context->default_label) {
-            error("Multiple 'default' labels inside the same switch.");
+            error(input, "Multiple 'default' labels inside the same switch.");
         } else {
             struct block *next = cfg_block_init(def);
             parent->jump[0] = next;
             switch_context->default_label = next;
-            next = statement(def, next);
+            next = statement(input, def, next);
             parent = next;
         }
         break;
     case IDENTIFIER:
-        if (peekn(2).token == ':') {
-            consume(IDENTIFIER);
+        if (peekn(input, 2).token == ':') {
+            consume(input, IDENTIFIER);
             sym = sym_lookup(&ns_label, tok.d.string);
             if (sym && sym->symtype == SYM_DEFINITION) {
-                error("Duplicate label '%s'.", str_raw(tok.d.string));
+                error(input, "Duplicate label '%s'.", str_raw(tok.d.string));
             } else {
                 sym = sym_add(
+                    input,
                     &ns_label,
                     tok.d.string,
                     basic_type__void,
@@ -465,12 +478,12 @@ INTERNAL struct block *statement(struct definition *def, struct block *parent)
                 parent->jump[0] = sym->value.label;
                 parent = sym->value.label;
             }
-            consume(':');
-            return statement(def, parent);
+            consume(input, ':');
+            return statement(input, def, parent);
         }
         sym = sym_lookup(&ns_ident, tok.d.string);
         if (sym && sym->symtype == SYM_TYPEDEF) {
-            parent = declaration(def, parent);
+            parent = declaration(input, def, parent);
             break;
         }
         /* Fallthrough. */
@@ -480,12 +493,12 @@ INTERNAL struct block *statement(struct definition *def, struct block *parent)
     case '(':
     case INCREMENT:
     case DECREMENT:
-        parent = expression(def, parent);
+        parent = expression(input, def, parent);
         parent->expr = eval_expression_statement(def, parent, parent->expr);
-        consume(';');
+        consume(input, ';');
         break;
     default:
-        parent = declaration(def, parent);
+        parent = declaration(input, def, parent);
         break;
     }
 
@@ -496,15 +509,19 @@ INTERNAL struct block *statement(struct definition *def, struct block *parent)
  * Treat statements and declarations equally, allowing declarations in
  * between statements as in modern C. Called compound-statement in K&R.
  */
-INTERNAL struct block *block(struct definition *def, struct block *parent)
+INTERNAL struct block *block(
+    struct preprocessor *input,
+    struct definition *def,
+    struct block *parent)
 {
-    consume('{');
+    consume(input, '{');
     push_scope(&ns_ident);
     push_scope(&ns_tag);
-    while (peek().token != '}') {
-        parent = statement(def, parent);
+    while (peek(input).token != '}') {
+        parent = statement(input, def, parent);
     }
-    consume('}');
+
+    consume(input, '}');
     pop_scope(&ns_tag);
     pop_scope(&ns_ident);
     return parent;
