@@ -111,5 +111,17 @@
     <ClCompile Include="..\..\src\optimizer\transform.c">
       <Filter>Source Files\opt</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\util\argparse.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\util\hash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\util\string.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\linker.c">
+      <Filter>Source Files\backend\x86</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

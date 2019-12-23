@@ -12,6 +12,10 @@
 
 #include <assert.h>
 
+#ifdef _WIN32
+#pragma warning(disable: 4146)
+#endif // _WIN32
+
 #define IDENT(s) {IDENTIFIER, 0, 1, 0, {0}, {SHORT_STRING_INIT(s)}}
 
 INTERNAL struct token

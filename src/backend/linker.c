@@ -108,6 +108,14 @@ static void print_invocation(void)
 }
 #endif
 
+#ifdef _WIN32
+INTERNAL int invoke_linker(void)
+{
+	return 0;
+}
+#else
+
+
 INTERNAL int invoke_linker(void)
 {
     char **argv;
@@ -147,3 +155,5 @@ INTERNAL int invoke_linker(void)
     array_clear(&ld_user_args);
     return ret;
 }
+
+#endif // _WIN32

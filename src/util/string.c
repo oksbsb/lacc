@@ -3,6 +3,7 @@
 # define EXTERNAL extern
 #endif
 #include <lacc/string.h>
+#include <lacc/type.h>
 
 #include <ctype.h>
 #include <string.h>

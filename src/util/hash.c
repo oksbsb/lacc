@@ -3,6 +3,7 @@
 # define EXTERNAL extern
 #endif
 #include <lacc/hash.h>
+#include <lacc/type.h>
 
 #include <assert.h>
 #include <stdlib.h>

@@ -124,6 +124,7 @@
     <ClCompile Include="..\..\src\backend\assembler.c" />
     <ClCompile Include="..\..\src\backend\compile.c" />
     <ClCompile Include="..\..\src\backend\graphviz\dot.c" />
+    <ClCompile Include="..\..\src\backend\linker.c" />
     <ClCompile Include="..\..\src\backend\x86_64\abi.c" />
     <ClCompile Include="..\..\src\backend\x86_64\assemble.c" />
     <ClCompile Include="..\..\src\backend\x86_64\dwarf.c" />
@@ -148,6 +149,9 @@
     <ClCompile Include="..\..\src\preprocessor\preprocess.c" />
     <ClCompile Include="..\..\src\preprocessor\strtab.c" />
     <ClCompile Include="..\..\src\preprocessor\tokenize.c" />
+    <ClCompile Include="..\..\src\util\argparse.c" />
+    <ClCompile Include="..\..\src\util\hash.c" />
+    <ClCompile Include="..\..\src\util\string.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
