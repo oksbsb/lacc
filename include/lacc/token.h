@@ -141,8 +141,8 @@ enum token_type {
  * which element is valid.
  */
 union value {
-    unsigned long u;
-    signed long i;
+    unsigned QWORD u;
+    signed QWORD i;
     float f;
     double d;
     long double ld;

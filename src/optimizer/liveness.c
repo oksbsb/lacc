@@ -17,7 +17,7 @@
  * Pointers can point to anything, so we cannot say for sure what is
  * written.
  */
-static unsigned long set_def_bit(struct var var)
+static unsigned QWORD set_def_bit(struct var var)
 {
     switch (var.kind) {
     case DIRECT:
@@ -35,7 +35,7 @@ static unsigned long set_def_bit(struct var var)
  *
  * Pointers can point to anything, so assume everything is touched.
  */
-static unsigned long set_use_bit(struct var var)
+static unsigned QWORD set_use_bit(struct var var)
 {
     switch (var.kind) {
     case DEREF:
@@ -60,9 +60,9 @@ static unsigned long set_use_bit(struct var var)
     return 0;
 }
 
-static unsigned long use(const struct expression *expr)
+static unsigned QWORD use(const struct expression *expr)
 {
-    unsigned long r = 0ul;
+    unsigned QWORD r = 0ul;
 
     switch (expr->op) {
     default:
@@ -104,10 +104,10 @@ static int is_or_has_pointer(Type type)
  * Consider special case of sending a pointer into a function. Assume
  * then that anything can be used.
  */
-static unsigned long uses(const struct statement *s)
+static unsigned QWORD uses(const struct statement *s)
 {
     struct var t;
-    unsigned long r;
+    unsigned QWORD r;
 
     assert(s->st != IR_ASM);
     r = use(&s->expr);
@@ -130,7 +130,7 @@ static unsigned long uses(const struct statement *s)
     return r;
 }
 
-static unsigned long def(const struct statement *s)
+static unsigned QWORD def(const struct statement *s)
 {
     switch (s->st) {
     case IR_ASSIGN:
@@ -145,7 +145,7 @@ static unsigned long def(const struct statement *s)
 INTERNAL int live_variable_analysis(struct block *block)
 {
     int i;
-    unsigned long top;
+    unsigned QWORD top;
     struct statement *prev, *next;
 
     top = block->in;

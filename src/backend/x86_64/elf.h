@@ -6,10 +6,10 @@
 
 #include <stdio.h>
 
-typedef unsigned long Elf64_Addr, Elf64_Off, Elf64_Xword;
+typedef unsigned QWORD Elf64_Addr, Elf64_Off, Elf64_Xword;
 typedef unsigned int Elf64_Word;
 typedef unsigned short Elf64_Half;
-typedef long Elf64_Sxword;
+typedef QWORD Elf64_Sxword;
 typedef int Elf64_Sword;
 
 typedef struct {
@@ -118,7 +118,7 @@ enum rel_type {
     R_X86_64_GOTPCREL = 9           /* word32   G + GOT + A - P */
 };
 
-#define ELF64_R_INFO(s, t) ((((long) s) << 32) + (((long) t) & 0xFFFFFFFFL))
+#define ELF64_R_INFO(s, t) ((((QWORD) s) << 32) + (((QWORD) t) & 0xFFFFFFFFL))
 
 EXTERNAL struct elf_sections {
     int shstrtab;

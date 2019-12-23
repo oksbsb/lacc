@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Source Files\backend">
+      <UniqueIdentifier>{9af28f96-e7dd-4019-8e2c-6a557bee4b90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\opt">
+      <UniqueIdentifier>{ea37cbf3-e499-40ca-ab98-e9a06826989b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\parser">
+      <UniqueIdentifier>{0ba0e455-93b5-48d5-9438-c3afa03dc9e1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\prepro">
+      <UniqueIdentifier>{64420e27-7eec-4912-8a23-cdf71e6d075f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\backend\x86">
+      <UniqueIdentifier>{0f3d50b0-aa67-4004-b18d-75a45406f00f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\src\context.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\lacc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\graphviz\dot.c">
+      <Filter>Source Files\backend</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\x86_64\encoding.c">
+      <Filter>Source Files\backend\x86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\x86_64\abi.c">
+      <Filter>Source Files\backend\x86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\x86_64\assemble.c">
+      <Filter>Source Files\backend\x86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\x86_64\dwarf.c">
+      <Filter>Source Files\backend\x86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\x86_64\elf.c">
+      <Filter>Source Files\backend\x86</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\assembler.c">
+      <Filter>Source Files\backend</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\backend\compile.c">
+      <Filter>Source Files\backend</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\preprocessor\directive.c">
+      <Filter>Source Files\prepro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\preprocessor\input.c">
+      <Filter>Source Files\prepro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\preprocessor\macro.c">
+      <Filter>Source Files\prepro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\preprocessor\preprocess.c">
+      <Filter>Source Files\prepro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\preprocessor\strtab.c">
+      <Filter>Source Files\prepro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\preprocessor\tokenize.c">
+      <Filter>Source Files\prepro</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\declaration.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\eval.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\expression.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\initializer.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\parse.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\statement.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\symtab.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\parser\typetree.c">
+      <Filter>Source Files\parser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\optimizer\liveness.c">
+      <Filter>Source Files\opt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\optimizer\optimize.c">
+      <Filter>Source Files\opt</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\optimizer\transform.c">
+      <Filter>Source Files\opt</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

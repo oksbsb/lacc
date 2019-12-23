@@ -337,7 +337,7 @@ static int is_int_constant(struct var v)
             || (v.imm.i <= INT_MAX && v.imm.i >= INT_MIN));
 }
 
-static struct immediate constant(long n, int w)
+static struct immediate constant(QWORD n, int w)
 {
     struct immediate imm = {0};
     assert(w == 1 || w == 2 || w == 4 || w == 8);
@@ -443,7 +443,7 @@ static int is_zero(union value val, Type type)
     case T_CHAR:
     case T_SHORT:
     case T_INT:
-    case T_LONG:
+    case T_QWORD:
         return val.u == 0;
     case T_FLOAT:
         return val.f == 0.0f;
@@ -1102,7 +1102,7 @@ static void store_op(
     struct var target)
 {
     size_t w;
-    long mask;
+    QWORD mask;
     enum reg ax;
     enum opcode opc;
     struct var field;
@@ -3177,7 +3177,7 @@ static void compile_data_assign(struct var target, struct var val)
             if (is_long_double(val.type)) {
                 union {
                     long double val;
-                    long arr[2];
+                    QWORD arr[2];
                 } cast = {0};
                 imm.width = 8;
                 cast.val = val.imm.ld;

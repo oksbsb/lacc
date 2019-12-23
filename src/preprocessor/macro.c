@@ -857,9 +857,14 @@ INTERNAL void register_builtin_definitions(enum cstd version)
     register_macro("__TIME__", get__time__(ts));
     register_macro("__x86_64__", "1");
     register_macro("__LP64__", "1");
+	#ifdef _WIN32
+    register_macro("__SIZE_TYPE__", "unsigned __int64");
+    register_macro("__PTRDIFF_TYPE__", "signed __int64");
+	#else
     register_macro("__SIZE_TYPE__", "unsigned long");
-    register_macro("__WCHAR_TYPE__", "signed int");
     register_macro("__PTRDIFF_TYPE__", "signed long");
+	#endif
+    register_macro("__WCHAR_TYPE__", "signed int");
     register_macro("__CHAR_BIT__", "8");
     register_macro("__SIZEOF_LONG__", "8");
     register_macro("__SIZEOF_POINTER__", "8");

@@ -16,7 +16,7 @@
     || ((arg) >= XMM8 && (arg) <= XMM15))
 
 #define in_byte_range(arg) ((arg) >= -128 && (arg) <= 127)
-#define in_32bit_range(arg) ((arg) >= -2147483648 && (arg) <= 2147483647)
+#define in_32bit_range(arg) ((arg) >= (QWORD)-2147483648 && (arg) <= (QWORD)2147483647)
 
 /*
  * REX prefix contains bits [0, 1, 0, 0, W, R, X, B]

@@ -2,6 +2,7 @@
 #define ABI_H
 
 #include <lacc/symbol.h>
+#include <lacc/type.h>
 
 #define MAX_INTEGER_ARGS 6
 #define MAX_SSE_ARGS 8

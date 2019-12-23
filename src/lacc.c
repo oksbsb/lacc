@@ -51,7 +51,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
-#include <unistd.h>
+//#include <unistd.h>
 
 /*
  * Configurable location of where compiler is installed. Headers can be

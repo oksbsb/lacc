@@ -173,7 +173,7 @@ static enum suffix read_integer_suffix(const char *ptr, const char **endptr)
 }
 
 static const Type constant_integer_type(
-    unsigned long int value,
+    unsigned QWORD value,
     enum suffix suffix,
     int is_decimal)
 {
@@ -285,7 +285,7 @@ INTERNAL struct token convert_preprocessing_number(struct token t)
 static char convert_escape_sequence(const char *in, const char **endptr)
 {
     static char buf[4];
-    long n;
+    QWORD n;
     int i;
 
     *endptr = in + 1;

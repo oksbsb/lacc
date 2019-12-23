@@ -623,7 +623,7 @@ static void zero_initialize(
     case T_CHAR:
     case T_SHORT:
     case T_INT:
-    case T_LONG:
+    case T_QWORD:
     case T_FLOAT:
     case T_DOUBLE:
     case T_LDOUBLE:
@@ -771,7 +771,7 @@ static int is_constant_assignment(const struct statement *st)
 
 static int merge_assignments(struct statement *a, const struct statement *b)
 {
-    long m1, m2;
+    QWORD m1, m2;
 
     if (a->t.offset != b->t.offset
         || !is_constant_assignment(a)

@@ -86,7 +86,7 @@ static char *vartostr(const struct var var)
         switch (type_of(var.type)) {
         default: assert(0);
         case T_POINTER:
-        case T_LONG:
+        case T_QWORD:
         case T_BOOL:
         case T_CHAR:
         case T_SHORT:

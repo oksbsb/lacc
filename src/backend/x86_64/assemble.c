@@ -247,7 +247,7 @@ INTERNAL int asm_symbol(const struct symbol *sym)
         } else {
             union {
                 long double ld;
-                long i[2];
+                QWORD i[2];
             } conv = {0};
             assert(is_long_double(sym->type));
             conv.ld = sym->value.constant.ld;

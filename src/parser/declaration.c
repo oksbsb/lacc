@@ -817,7 +817,7 @@ done:
             break;
         case M_LONG:
         case M_LONG_LONG:
-            type.type = T_LONG;
+            type.type = T_QWORD;
         default:
             break;
         }

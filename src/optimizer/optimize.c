@@ -196,7 +196,7 @@ static void execute_iterative_dataflow(int (*callback)(struct block *))
 }
 
 #if !NDEBUG
-static void print_liveness_statement(unsigned long live)
+static void print_liveness_statement(unsigned QWORD live)
 {
     int j, k;
     const struct symbol *sym;

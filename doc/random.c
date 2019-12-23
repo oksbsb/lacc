@@ -12,7 +12,7 @@
 #include "csmith.h"
 
 
-static long __undefined;
+static QWORD __undefined;
 
 /* --- Struct/Union Declarations --- */
 struct S0 {

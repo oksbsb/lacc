@@ -49,8 +49,8 @@ struct dwarf_attr {
     union {
         const char *str;
         const struct symbol *sym;
-        long num;
-        unsigned long unum;
+        QWORD num;
+        unsigned QWORD unum;
     } value;
 };
 
@@ -65,7 +65,7 @@ struct dwarf_die {
 /* Each compile unit has a root DIE with code DW_UT_compile. */
 static struct dwarf_die *dwarf_root_die;
 
-static size_t ULEB128_encode(unsigned char *buf, unsigned long value)
+static size_t ULEB128_encode(unsigned char *buf, unsigned QWORD value)
 {
     size_t i;
     unsigned char b;
@@ -85,7 +85,7 @@ static size_t ULEB128_encode(unsigned char *buf, unsigned long value)
     return i;
 }
 
-static void dwarf_write_ULEB128(int shid, unsigned long value)
+static void dwarf_write_ULEB128(int shid, unsigned QWORD value)
 {
     unsigned char buf[8];
     size_t len;
@@ -123,7 +123,7 @@ static void dwarf_add_attribute(struct dwarf_die *die, int name, int form, ...)
         attr.value.num = va_arg(args, int);
         break;
     case DW_FORM_data8:
-        attr.value.num = va_arg(args, long);
+        attr.value.num = va_arg(args, QWORD);
         break;
     case DW_FORM_string:
         attr.value.str = va_arg(args, const char *);

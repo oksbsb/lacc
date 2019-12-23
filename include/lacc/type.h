@@ -9,13 +9,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#define QWORD __int64
+#else
+#define QWORD long
+#endif
+
 enum type {
     T_VOID,
     T_BOOL,
     T_CHAR,
     T_SHORT,
     T_INT,
-    T_LONG,
+	T_QWORD,
     T_FLOAT,
     T_DOUBLE,
     T_LDOUBLE,
@@ -63,7 +69,7 @@ typedef struct {
 #define is_bool(t) (type_of(t) == T_BOOL)
 #define is_char(t) (type_of(t) == T_CHAR)
 #define is_int(t) (type_of(t) == T_INT)
-#define is_integer(t) (type_of(t) >= T_BOOL && type_of(t) <= T_LONG)
+#define is_integer(t) (type_of(t) >= T_BOOL && type_of(t) <= T_QWORD)
 #define is_signed(t) (!is_unsigned(t) && is_integer(t))
 #define is_unsigned(t) ((!(t).is_pointer && (t).is_unsigned) || is_bool(t))
 #define is_pointer(t) (type_of(t) == T_POINTER)
@@ -176,5 +182,6 @@ INTERNAL Type usual_arithmetic_conversion(Type t1, Type t2);
  * Optionally expand a specific tag or typedef symbol.
  */
 INTERNAL int fprinttype(FILE *stream, Type type, const struct symbol *expand);
+
 
 #endif

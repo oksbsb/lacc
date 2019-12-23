@@ -61,7 +61,7 @@ static struct param_class flatten(
     case T_CHAR:
     case T_INT:
     case T_SHORT:
-    case T_LONG:
+    case T_QWORD:
     case T_POINTER:
         pc.eightbyte[i] = combine(pc.eightbyte[i], PC_INTEGER);
         break;

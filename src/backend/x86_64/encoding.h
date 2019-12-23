@@ -111,7 +111,11 @@ struct immediate {
         char byte;
         short word;
         int dword;
-        long qword;
+#ifdef _WIN32
+		__int64 qword;
+#else
+		long qword;
+#endif
         struct address addr;
         String string;
     } d;

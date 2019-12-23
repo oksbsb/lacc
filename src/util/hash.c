@@ -15,7 +15,7 @@ struct hash_entry {
      */
     void *data;
 
-    unsigned long hash;
+    unsigned QWORD hash;
     struct hash_entry *next;
 };
 
@@ -28,10 +28,10 @@ enum hash_op {
 /*
  * Hash algorithm is adapted from http://www.cse.yorku.ca/~oz/hash.html.
  */
-static unsigned long djb2_hash(String str)
+static unsigned QWORD djb2_hash(String str)
 {
     int c;
-    unsigned long hash = 5381;
+    unsigned QWORD hash = 5381;
     const char
         *p = str_raw(str),
         *q = p + str.len;
@@ -77,7 +77,7 @@ static struct hash_entry *hash_walk(
     static struct hash_entry deleted;
 
     struct hash_entry *ref, *pre;
-    unsigned long
+    unsigned QWORD
         hash = djb2_hash(key),
         pos = hash % tab->capacity;
 

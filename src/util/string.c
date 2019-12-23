@@ -66,14 +66,14 @@ INTERNAL String str_init(const char *str)
 
 INTERNAL int str_cmp(String s1, String s2)
 {
-    long *a, *b;
+    QWORD *a, *b;
     if (s1.len != s2.len) {
         return 1;
     }
 
     if (s1.len < SHORT_STRING_LEN) {
-        a = (long *) ((void *) &s1);
-        b = (long *) ((void *) &s2);
+        a = (QWORD *) ((void *) &s1);
+        b = (QWORD *) ((void *) &s2);
         return a[0] != b[0] || a[1] != b[1];
     }
 

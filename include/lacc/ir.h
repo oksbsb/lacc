@@ -137,7 +137,7 @@ struct statement {
         IR_ASM        /* */
     } st;
     int asm_index;
-    unsigned long out;
+    unsigned QWORD out;
     struct var t;
     struct expression expr;
 };
@@ -190,8 +190,8 @@ struct block {
     } color;
 
     /* Liveness at the start and end of the block. */
-    unsigned long in;
-    unsigned long out;
+    unsigned QWORD in;
+    unsigned QWORD out;
 };
 
 /*

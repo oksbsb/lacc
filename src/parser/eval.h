@@ -169,7 +169,7 @@ INTERNAL int immediate_bool(struct expression expr);
 INTERNAL struct var create_var(struct definition *def, Type type);
 
 /* Create an immediate unsigned integer of the given type. */
-INTERNAL struct var imm_unsigned(Type type, unsigned long val);
+INTERNAL struct var imm_unsigned(Type type, unsigned QWORD val);
 
 /* Immediate representing void value. */
 INTERNAL struct var var_void(void);

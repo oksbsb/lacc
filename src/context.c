@@ -51,10 +51,10 @@ static int vfprintf_cc(FILE *stream, const char *format, va_list ap)
                 switch (c) {
                 default: assert(0);
                 case 'u':
-                    n += fprintf(stream, "%lu", va_arg(ap, unsigned long));
+                    n += fprintf(stream, "%lu", va_arg(ap, unsigned QWORD));
                     break;
                 case 'd':
-                    n += fprintf(stream, "%ld", va_arg(ap, long));
+                    n += fprintf(stream, "%ld", va_arg(ap, QWORD));
                     break;
                 }
                 break;

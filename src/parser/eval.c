@@ -142,7 +142,7 @@ INTERNAL struct var var_numeric(Type type, union value val)
     return var;
 }
 
-static struct var imm_signed(Type type, long n)
+static struct var imm_signed(Type type, QWORD n)
 {
     union value val = {0};
     assert(is_signed(type));
@@ -150,7 +150,7 @@ static struct var imm_signed(Type type, long n)
     return var_numeric(type, val);
 }
 
-INTERNAL struct var imm_unsigned(Type type, unsigned long n)
+INTERNAL struct var imm_unsigned(Type type, unsigned QWORD n)
 {
     union value val = {0};
 
@@ -437,16 +437,16 @@ INTERNAL union value convert(union value val, Type type, Type to)
                   : cast_immediate(val, type, unsigned int);
         }
         break;
-    case T_LONG:
+    case T_QWORD:
         if (is_signed(to)) {
             val.i = is_float_below(val, type, LONG_MIN) ? LONG_MIN
                   : is_float_above(val, type, LONG_MAX) ? LONG_MAX
-                  : cast_immediate(val, type, signed long);
+                  : cast_immediate(val, type, signed QWORD);
         } else {
     case T_POINTER:
             val.u = is_float_below(val, type, 0) ? 0
                   : is_float_above(val, type, ULONG_MAX) ? ULONG_MAX
-                  : cast_immediate(val, type, unsigned long);
+                  : cast_immediate(val, type, unsigned QWORD);
         }
         break;
     default: assert(0);
@@ -1463,7 +1463,7 @@ static struct var assign_field(
     struct expression expr)
 {
     Type type;
-    long mask;
+    QWORD mask;
 
     assert(is_field(target));
     assert(is_integer(target.type));

@@ -30,7 +30,7 @@ struct asm_token {
     enum asm_token_type type;
     const char *str;
     size_t len;
-    long val;
+    QWORD val;
 };
 
 static array_of(struct asm_operand) operands;
@@ -195,7 +195,7 @@ static enum reg parse_asm_int_reg(const char *str, size_t len, int *w)
 
 static struct registr parse__asm__register(const char *str, size_t len)
 {
-    long d;
+    QWORD d;
     char *endptr;
     struct registr reg = {0};
 
@@ -296,7 +296,7 @@ static enum instr_optype parse__asm__operand(
     const char **endptr,
     union operand *op)
 {
-    long l;
+    QWORD l;
     enum instr_optype opt;
     struct asm_operand asmop;
     struct block *target;

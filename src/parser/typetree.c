@@ -20,11 +20,11 @@ INTERNAL const Type
     basic_type__char           = { T_CHAR },
     basic_type__short          = { T_SHORT },
     basic_type__int            = { T_INT },
-    basic_type__long           = { T_LONG },
+    basic_type__long           = { T_QWORD },
     basic_type__unsigned_char  = { T_CHAR, 1 },
     basic_type__unsigned_short = { T_SHORT, 1 },
     basic_type__unsigned_int   = { T_INT, 1 },
-    basic_type__unsigned_long  = { T_LONG, 1 },
+    basic_type__unsigned_long  = { T_QWORD, 1 },
     basic_type__float          = { T_FLOAT },
     basic_type__double         = { T_DOUBLE },
     basic_type__long_double    = { T_LDOUBLE };
@@ -53,7 +53,7 @@ struct typetree {
 
     /*
      * Symbol holding size of variable length array. Type of variable is
-     * always size_t (unsigned long).
+     * always size_t (unsigned QWORD).
      *
      * Special value NULL means any length '*', if is_vla is set. The
      * flag is always set if vlen is not NULL.
@@ -996,7 +996,7 @@ INTERNAL int is_compatible(Type l, Type r)
     case T_CHAR:
     case T_SHORT:
     case T_INT:
-    case T_LONG:
+    case T_QWORD:
     case T_FLOAT:
     case T_DOUBLE:
     case T_LDOUBLE:
@@ -1043,7 +1043,7 @@ INTERNAL size_t size_of(Type type)
     case T_INT:
     case T_FLOAT:
         return 4;
-    case T_LONG:
+    case T_QWORD:
     case T_DOUBLE:
     case T_POINTER:
         return 8;
@@ -1180,8 +1180,8 @@ INTERNAL int fprinttype(FILE *stream, Type type, const struct symbol *expand)
     case T_INT:
         n += fputs("int", stream);
         break;
-    case T_LONG:
-        n += fputs("long", stream);
+    case T_QWORD:
+        n += fputs("QWORD", stream);
         break;
     case T_FLOAT:
         n += fputs("float", stream);
