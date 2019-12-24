@@ -45,7 +45,15 @@ enum reg {
     ST4,
     ST5,
     ST6,
-    ST7
+    ST7,
+
+	/* segement register*/
+	es,
+	cs,
+	ss,
+	ds,
+	fs,
+	gs
 };
 
 /*
@@ -185,6 +193,7 @@ enum prefix {
     PREFIX_REP = 0xF3,
     PREFIX_REPE = 0xF3,
     PREFIX_REPNE = 0xF2
+
 };
 
 /*
@@ -210,6 +219,8 @@ enum tttn {
     CC_G = 0xF
 };
 
+INTERNAL const unsigned char  segment_prefixes[];
+
 /* Instructions with register, memory or immediate operands. */
 struct instruction {
     enum opcode opcode;
@@ -224,8 +235,9 @@ struct instruction {
         OPT_REG_MEM = 16,
         OPT_MEM_REG = 32,
         OPT_IMM_REG = 64,
-        OPT_IMM_MEM = 128
-    } optype;
+        OPT_IMM_MEM = 128,
+		OPT_SEG_PRE = 256
+	} optype;
     union operand {
         int width;
         struct registr reg;

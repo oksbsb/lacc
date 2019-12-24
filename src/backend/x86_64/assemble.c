@@ -50,6 +50,10 @@ static void set_section(enum section section)
     current_section = section;
 }
 
+static const char *segement_reg_name[] = {
+	"es", "cs", "ss", "ds", "fs", "gs"
+};
+
 static const char *reg_name[] = {
     "%al",   "%ax",   "%eax",  "%rax",
     "%cl",   "%cx",   "%ecx",  "%rcx",
@@ -265,15 +269,30 @@ INTERNAL int asm_symbol(const struct symbol *sym)
     return 0;
 }
 
+INTERNAL char* PREFIX_to_reg(enum prefix p)
+{
+	int i;
+
+	for (i = 0; segment_prefixes[i] != 0; i++)
+	{
+		if (p == segment_prefixes[i])
+		{
+			return segement_reg_name[i];
+		}
+	}
+
+	return "";
+}
 INTERNAL int asm_text(struct instruction instr)
 {
     char buf[11] = {0};
+	char* pre_segment = "";
 
     out("\t");
     switch (instr.prefix) {
     case PREFIX_REP: out("rep "); break;
     case PREFIX_REPNE: out("repne "); break;
-    default: break;
+	default: pre_segment = PREFIX_to_reg(instr.prefix);	break;
     }
 
     get_mnemonic(instr, buf);
@@ -295,7 +314,7 @@ INTERNAL int asm_text(struct instruction instr)
         break;
     case OPT_MEM:
     case OPT_MEM_REG:
-        out("\t%s", asm_address(instr.source.mem.addr));
+		out("\t%s%s%s%s", pre_segment[0] ? "%%" : "", pre_segment, pre_segment[0] ? ":" : "", asm_address(instr.source.mem.addr));
         break;
     default:
         break;
@@ -309,7 +328,7 @@ INTERNAL int asm_text(struct instruction instr)
         break;
     case OPT_REG_MEM:
     case OPT_IMM_MEM:
-        out(", %s", asm_address(instr.dest.mem.addr));
+        out(", %s%s%s%s", pre_segment[0] ? "%%" : "", pre_segment, pre_segment[0] ? ":" : "", asm_address(instr.dest.mem.addr));
         break;
     default:
         break;

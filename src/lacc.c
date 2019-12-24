@@ -590,6 +590,8 @@ static void register_builtin_declarations(void)
         "   void *overflow_arg_area;"
         "   void *reg_save_area;"
         "} __builtin_va_list[1];");
+
+	inject_line("#define __BUILTIN_VA_LIST");
 }
 
 /*

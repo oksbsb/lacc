@@ -183,5 +183,8 @@ INTERNAL Type usual_arithmetic_conversion(Type t1, Type t2);
  */
 INTERNAL int fprinttype(FILE *stream, Type type, const struct symbol *expand);
 
+#ifdef _WIN32
+#define strdup _strdup
+#endif // _WIN32
 
 #endif

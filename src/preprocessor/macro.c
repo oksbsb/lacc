@@ -868,7 +868,7 @@ INTERNAL void register_builtin_definitions(enum cstd version)
     register_macro("__CHAR_BIT__", "8");
     register_macro("__SIZEOF_LONG__", "8");
     register_macro("__SIZEOF_POINTER__", "8");
-    register_macro("__lacc__", "");
+    register_macro("__LACC__", "");
 
 #ifdef __linux__
     register_macro("__linux__", XSTR(__linux__));
@@ -892,7 +892,17 @@ INTERNAL void register_builtin_definitions(enum cstd version)
     }
 #endif
 
-    register_macro("__asm", "__asm__");
+	register_macro("__asm", "__asm__");
+
+	register_macro("__inline__", "inline");
+	register_macro("__inline", "inline");
+
+	register_macro("__volatile", "volatile");
+	register_macro("__volatile__", "volatile");
+	
+
+	register_macro("__cdecl", "");
+	register_macro("__extension__", "");
 
     switch (version) {
     case STD_C89:

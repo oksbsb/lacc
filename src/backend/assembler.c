@@ -177,11 +177,14 @@ static enum reg parse_asm_int_reg(const char *str, size_t len, int *w)
         {"r13b", R13, 1}, {"r13w", R13, 2}, {"r13d", R13, 4}, {"r13", R13, 8},
         {"r14b", R14, 1}, {"r14w", R14, 2}, {"r14d", R14, 4}, {"r14", R14, 8},
         {"r15b", R15, 1}, {"r15w", R15, 2}, {"r15d", R15, 4}, {"r15", R15, 8},
+		{"es", es, 0},{"cs", cs, 0},{"ss", ss, 0},{"ds", ds, 0},{"fs", fs, 0},{"gs", gs, 0},
+		{"", 0, 0}
     };
 
     int i;
 
-    for (i = 0; i < 4*16; ++i) {
+    for (i = 0;; ++i) {
+		if (regs[i].name[0] == 0 && regs[i].w == 0) break;
         if (len != strlen(regs[i].name)) continue;
         if (!strncmp(regs[i].name, str, len)) {
             *w = regs[i].w;
@@ -190,7 +193,9 @@ static enum reg parse_asm_int_reg(const char *str, size_t len, int *w)
     }
 
     fatal("Invalid assembly register %s.", str);
-    
+
+	// unreachable code
+	return AX;
 }
 
 static struct registr parse__asm__register(const char *str, size_t len)
@@ -327,7 +332,18 @@ static enum instr_optype parse__asm__operand(
         break;
     case ASM_REG:
         op->reg = parse__asm__register(t.str, t.len);
-        opt = OPT_REG;
+
+		if (*line == ':') {
+			if ( (op->reg.r < es) || (op->reg.r > gs)) {
+				fatal("Invalid segment register.");
+			}
+
+			opt = OPT_SEG_PRE;
+			line++;
+		}
+		else {
+			opt = OPT_REG;
+		}
         break;
     case ASM_OP:
         asmop = array_get(&operands, t.val);
@@ -366,10 +382,25 @@ static struct instruction parse__asm__instruction(
         instr.optype = OPT_NONE;
     } else {
         instr.optype = parse__asm__operand(line, &line, &instr.source);
+
+		if (instr.optype == OPT_SEG_PRE) {
+			instr.optype = parse__asm__operand(line, &line, &instr.source);
+
+			instr.prefix = segment_prefixes[instr.source.reg.r - es];
+		}
+
         skip_whitespace(line, &line);
         if (*line == ',') {
             opt1 = instr.optype;
             opt2 = parse__asm__operand(line + 1, &line, &instr.dest);
+
+			if (opt2 == OPT_SEG_PRE) {
+				instr.optype = parse__asm__operand(line, &line, &instr.dest);
+
+				instr.prefix = segment_prefixes[instr.dest.reg.r - es];
+			}
+
+
             if (opt1 == OPT_REG && opt2 == OPT_REG) {
                 instr.optype = OPT_REG_REG;
             } else if (opt1 == OPT_REG && opt2 == OPT_MEM) {
@@ -400,7 +431,8 @@ INTERNAL size_t read_line(
     const char *line,
     size_t len,
     char *ptr,
-    int *linecount);
+    int *linecount,
+	int full_line);
 
 INTERNAL int assemble_inline(
     struct asm_statement st,
@@ -428,7 +460,7 @@ INTERNAL int assemble_inline(
     str = str_raw(st.template);
     buf = calloc(len + 2, sizeof(*buf));
 
-    while ((read = read_line(str, len, buf + 1, &c)) != 0) {
+    while ((read = read_line(str, len, buf + 1, &c, 1)) != 0) {
         ptr = buf + 1;
         str += read;
         len -= read;

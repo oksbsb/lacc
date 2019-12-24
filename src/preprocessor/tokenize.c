@@ -323,9 +323,11 @@ static char convert_escape_sequence(const char *in, const char **endptr)
         *endptr = in + i;
         return (char) n;
     default:
-        fatal("Invalid escape sequence '\\%c'.", *in);
-        
+        fatal("Invalid escape sequence '\\%c'.", *in);       
     }
+
+	// unreachable code
+	return 0;
 }
 
 static char convert_char(const char *in, const char **endptr)
@@ -442,19 +444,19 @@ static struct token strtochar(const char *in, const char **endptr)
 
     assert(*in == '\'');
     start = ++in;
-    if (*in == '\\') {
-        parse_escape_sequence(in + 1, &in);
-    } else if (*in != '\'') {
-        in++;
-    } else {
-        fatal("Empty character constant.");
-        
-    }
 
-    if (*in != '\'') {
-        fatal("Multi-character constants are not supported.");
-        
-    }
+	if (*in == '\'') {
+		fatal("Empty character constant.");
+	}
+
+	while (*in != '\'') {
+		if (*in == '\\') {
+			parse_escape_sequence(in + 1, &in);
+		}
+		else {
+			in++;
+		}
+	}
 
     tok.d.string = str_register(start, in - start);
     *endptr = in + 1;

@@ -47,4 +47,8 @@ INTERNAL void warning(const char *, ...);
 /* Output error to stderr. */
 INTERNAL void error(const char *, ...);
 
+
+/* Output error to stderr, then exit */
+INTERNAL void fatal(const char *, ...);
+
 #endif

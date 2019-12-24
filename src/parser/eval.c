@@ -844,6 +844,8 @@ static Type common_compare_type(Type left, Type right)
 
     fatal("Invalid operands in relational expression: %t and %t", left, right);
     
+	//unreachable code
+	return basic_type__unsigned_long;
 }
 
 static struct expression cmp_ge(

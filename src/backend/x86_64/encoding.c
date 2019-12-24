@@ -66,6 +66,16 @@ enum opextra {
     OPX_WREG = OPX_W | OPX_REG
 };
 
+const unsigned char  segment_prefixes[] = {
+	0x26, /* es */
+	0x2e, /* cs */
+	0x36, /* ss */
+	0x3e, /* ds */
+	0x64, /* fs */
+	0x65, /* gs */
+	0
+};
+
 /*
  * Some instructions have fixed value of one operand, determined by the
  * opcode.
@@ -869,7 +879,9 @@ static struct encoding find_encoding(struct instruction instr)
     } while (encodings[i].opc == instr.opcode);
 
     fatal("Unsupported instruction.");
-    
+
+	// unreachable code
+	return encodings[0];
 }
 
 static int is_single_width(unsigned int w)

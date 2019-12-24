@@ -429,7 +429,8 @@ INTERNAL size_t read_line(
     const char *line,
     size_t len,
     char *ptr,
-    int *linecount)
+    int *linecount,
+	int full_line)
 {
     int lines;
     size_t count;
@@ -496,7 +497,13 @@ INTERNAL size_t read_line(
         *ptr++ = *end++;
     } while (end - line < len);
 
-    return 0;
+	if (full_line && (end - line >= len))
+	{
+		*ptr++ = '\0';
+		return end - line;
+	}
+
+	return 0;
 }
 
 /*
@@ -549,7 +556,7 @@ static char *initial_preprocess_line(struct source *fn)
             fn->buffer + fn->processed,
             fn->read - fn->processed,
             rline + 1,
-            &fn->line);
+            &fn->line, 0);
 
         if (!added) {
             if (!fn->processed) {
