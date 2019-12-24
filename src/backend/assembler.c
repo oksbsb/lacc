@@ -384,9 +384,9 @@ static struct instruction parse__asm__instruction(
         instr.optype = parse__asm__operand(line, &line, &instr.source);
 
 		if (instr.optype == OPT_SEG_PRE) {
-			instr.optype = parse__asm__operand(line, &line, &instr.source);
-
 			instr.prefix = segment_prefixes[instr.source.reg.r - es];
+
+			instr.optype = parse__asm__operand(line, &line, &instr.source);
 		}
 
         skip_whitespace(line, &line);
@@ -395,9 +395,9 @@ static struct instruction parse__asm__instruction(
             opt2 = parse__asm__operand(line + 1, &line, &instr.dest);
 
 			if (opt2 == OPT_SEG_PRE) {
-				instr.optype = parse__asm__operand(line, &line, &instr.dest);
-
 				instr.prefix = segment_prefixes[instr.dest.reg.r - es];
+
+				instr.optype = parse__asm__operand(line, &line, &instr.dest);
 			}
 
 
@@ -460,7 +460,7 @@ INTERNAL int assemble_inline(
     str = str_raw(st.template);
     buf = calloc(len + 2, sizeof(*buf));
 
-    while ((read = read_line(str, len, buf + 1, &c, 1)) != 0) {
+    while (len > 0 && (read = read_line(str, len, buf + 1, &c, 1)) != 0) {
         ptr = buf + 1;
         str += read;
         len -= read;
