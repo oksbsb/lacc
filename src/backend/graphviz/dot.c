@@ -87,14 +87,22 @@ static char *vartostr(const struct var var)
         default: assert(0);
         case T_POINTER:
         case T_QWORD:
+			if (is_unsigned(var.type)) {
+				n = sprintf(buffer, "%llx", var.imm.u);
+			}
+			else {
+				n = sprintf(buffer, "%llx", var.imm.i);
+			}
+			break;
+
         case T_BOOL:
         case T_CHAR:
         case T_SHORT:
         case T_INT:
             if (is_unsigned(var.type)) {
-                n = sprintf(buffer, "%lu", var.imm.u);
+                n = sprintf(buffer, "%lx", (unsigned int)var.imm.u);
             } else {
-                n = sprintf(buffer, "%ld", var.imm.i);
+                n = sprintf(buffer, "%lx", (int)var.imm.i);
             }
             break;
         case T_FLOAT:

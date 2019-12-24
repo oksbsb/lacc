@@ -74,8 +74,8 @@ static enum state pop_state(void)
     enum state val;
 
     if (!array_len(&branch_stack)) {
-        error("Unmatched #endif directive.");
-        exit(1);
+        fatal("Unmatched #endif directive.");
+        
     }
 
     val = array_pop_back(&branch_stack);
@@ -102,8 +102,8 @@ static void expect(const struct token *list, int token)
     if (list->token != token) {
         a = basic_token[token].d.string;
         b = list->d.string;
-        error("Expected '%s', but got '%s'.", str_raw(a), str_raw(b));
-        exit(1);
+        fatal("Expected '%s', but got '%s'.", str_raw(a), str_raw(b));
+        
     }
 }
 
@@ -146,8 +146,8 @@ static struct number preprocess_primary(
     default:
         if (!list->is_expandable) {
             s = list->d.string;
-            error("Invalid primary expression '%s' in directive.", str_raw(s));
-            exit(1);
+            fatal("Invalid primary expression '%s' in directive.", str_raw(s));
+            
         }
     case IDENTIFIER:
         assert(!macro_definition(list->d.string));
@@ -158,8 +158,8 @@ static struct number preprocess_primary(
 
     *endptr = list + 1;
     if (!is_integer(num.type)) {
-        error("Preprocessing number must be integer.");
-        exit(1);
+        fatal("Preprocessing number must be integer.");
+        
     } else if (size_of(num.type) != 8) {
         if (is_signed(num.type)) {
             num.val = convert(num.val, num.type, basic_type__long);
@@ -253,8 +253,8 @@ static struct number preprocess_multiplicative(
         case '/':
             r = preprocess_unary(list + 1, &list);
             if (r.val.i == 0) {
-                error("Division by zero.");
-                exit(1);
+                fatal("Division by zero.");
+                
             } else if (both_signed(&l, &r)) {
                 l.val.i /= r.val.i;
             } else {
@@ -264,8 +264,8 @@ static struct number preprocess_multiplicative(
         case '%':
             r = preprocess_unary(list + 1, &list);
             if (r.val.i == 0) {
-                error("Modulo by zero.");
-                exit(1);
+                fatal("Modulo by zero.");
+                
             } else if (both_signed(&l, &r)) {
                 l.val.i %= r.val.i;
             } else {
@@ -581,8 +581,8 @@ static void preprocess_include(TokenArray *line)
         t = array_get(line, 0);
         if (t.token == PREP_STRING) {
             if (len > 2) {
-                error("Stray tokens in include directive.");
-                exit(1);
+                fatal("Stray tokens in include directive.");
+                
             }
             path = t.d.string;
             include_file(str_raw(path));
@@ -600,8 +600,8 @@ static void preprocess_include(TokenArray *line)
         if (!exp) {
             expand(line);
         } else {
-            error("Invalid include directive.");
-            exit(1);
+            fatal("Invalid include directive.");
+            
         }
     }
 }
@@ -618,8 +618,8 @@ static struct macro preprocess_define(
 
     t = *line++;
     if (!t.is_expandable) {
-        error("Invalid definition of %s as a macro", str_raw(t.d.string));
-        exit(1);
+        fatal("Invalid definition of %s as a macro", str_raw(t.d.string));
+        
     }
 
     macro.name = t.d.string;
@@ -636,8 +636,8 @@ static struct macro preprocess_define(
                 break;
             }
             if (!line->is_expandable) {
-                error("Invalid macro parameter, expected identifer.");
-                exit(1);
+                fatal("Invalid macro parameter, expected identifer.");
+                
             }
             array_push_back(&params, *line++);
             if (line->token == DOTS) {
@@ -696,8 +696,8 @@ static void preprocess_line_directive(const struct token *line)
     }
 
     if (t.token != NUMBER || !is_int(t.type) || t.d.val.i <= 0) {
-        error("Expected positive integer in #line directive.");
-        exit(1);
+        fatal("Expected positive integer in #line directive.");
+        
     }
 
     current_file_line = t.d.val.i - 1;
@@ -707,8 +707,8 @@ static void preprocess_line_directive(const struct token *line)
     }
 
     if (line->token != NEWLINE) {
-        error("Unexpected token in #line directive.");
-        exit(1);
+        fatal("Unexpected token in #line directive.");
+        
     }
 }
 
@@ -770,8 +770,8 @@ INTERNAL void preprocess_directive(TokenArray *array)
         if (in_active_block()) {
             line++;
             if (!line->is_expandable) {
-                error("Expected identifier in 'ifndef' clause.");
-                exit(1);
+                fatal("Expected identifier in 'ifndef' clause.");
+                
             }
             def = macro_definition(line->d.string) == NULL;
             push_state(def ? BRANCH_LIVE : BRANCH_DEAD);
@@ -782,8 +782,8 @@ INTERNAL void preprocess_directive(TokenArray *array)
         if (in_active_block()) {
             line++;
             if (!line->is_expandable) {
-                error("Expected identifier in 'ifdef' clause.");
-                exit(1);
+                fatal("Expected identifier in 'ifdef' clause.");
+                
             }
             def = macro_definition(line->d.string) != NULL;
             push_state(def ? BRANCH_LIVE : BRANCH_DEAD);
@@ -796,8 +796,8 @@ INTERNAL void preprocess_directive(TokenArray *array)
         } else if (!tok_cmp(*line, ident__undef)) {
             line++;
             if (!line->is_expandable) {
-                error("Expected identifier in 'undef' clause.");
-                exit(1);
+                fatal("Expected identifier in 'undef' clause.");
+                
             }
             undef(line->d.string);
         } else if (!tok_cmp(*line, ident__include)) {
@@ -808,12 +808,12 @@ INTERNAL void preprocess_directive(TokenArray *array)
             array->data++;
             array->length--;
             s = stringify(array).d.string;
-            error("%s", str_raw(s));
-            exit(1);
+            fatal("%s", str_raw(s));
+            
         } else {
             s = line->d.string;
-            error("Unsupported preprocessor directive '%s'.", str_raw(s));
-            exit(1);
+            fatal("Unsupported preprocessor directive '%s'.", str_raw(s));
+            
         }
     }
 }

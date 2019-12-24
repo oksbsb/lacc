@@ -22,8 +22,8 @@ static const struct symbol *find_symbol(String name)
 {
     const struct symbol *sym = sym_lookup(&ns_ident, name);
     if (!sym) {
-        error("Undefined symbol '%s'.", str_raw(name));
-        exit(1);
+        fatal("Undefined symbol '%s'.", str_raw(name));
+        
     }
 
     return sym;
@@ -51,15 +51,15 @@ static struct block *parse__builtin_va_start(
     sym = find_symbol(param.d.string);
     type = def->symbol->type;
     if (!is_vararg(type)) {
-        error("Function must be vararg to use va_start.");
-        exit(1);
+        fatal("Function must be vararg to use va_start.");
+        
     }
 
     mb = get_member(type, nmembers(type) - 1);
     if (str_cmp(mb->name, sym->name) || sym->depth != 1) {
-        error("Expected last function argument %s as va_start argument.",
+        fatal("Expected last function argument %s as va_start argument.",
             str_raw(mb->name));
-        exit(1);
+        
     }
 
     consume(')');
@@ -171,9 +171,9 @@ static struct block *primary_expression(
         assert(block->expr.l.kind == DIRECT);
         break;
     default:
-        error("Unexpected '%s', not a valid primary expression.",
+        fatal("Unexpected '%s', not a valid primary expression.",
             str_raw(tok.d.string));
-        exit(1);
+        
     }
 
     return block;
@@ -271,17 +271,17 @@ static struct block *postfix(
             if (is_pointer(root.type) && is_function(type_deref(root.type))) {
                 type = type_deref(root.type);
             } else if (!is_function(root.type)) {
-                error("Expression must have type pointer to function, was %t.",
+                fatal("Expression must have type pointer to function, was %t.",
                     type);
-                exit(1);
+                
             }
             consume('(');
             args = push_argument_list();
             for (i = 0; i < nmembers(type); ++i) {
                 if (peek().token == ')') {
-                    error("Too few arguments, expected %d but got %d.",
+                    fatal("Too few arguments, expected %d but got %d.",
                         nmembers(type), i);
-                    exit(1);
+                    
                 }
                 mbr = get_member(type, i);
                 block = assignment_expression(def, block);
@@ -326,9 +326,9 @@ static struct block *postfix(
             tok = consume(IDENTIFIER);
             mbr = find_type_member(root.type, tok.d.string, NULL);
             if (!mbr) {
-                error("Invalid access, no member named '%s'.",
+                fatal("Invalid access, no member named '%s'.",
                     str_raw(tok.d.string));
-                exit(1);
+                
             }
             value = eval(def, block, root);
             value.type = mbr->type;
@@ -345,9 +345,9 @@ static struct block *postfix(
             if (is_struct_or_union(value.type)) {
                 mbr = find_type_member(value.type, tok.d.string, NULL);
                 if (!mbr) {
-                    error("Invalid access, %t has no member named '%s'.",
+                    fatal("Invalid access, %t has no member named '%s'.",
                         value.type, str_raw(tok.d.string));
-                    exit(1);
+                    
                 }
                 value.type = mbr->type;
                 value.field_width = mbr->field_width;
@@ -356,8 +356,8 @@ static struct block *postfix(
                 block->expr = as_expr(value);
                 root = block->expr;
             } else {
-                error("Invalid member access to type %t.", root.type);
-                exit(1);
+                fatal("Invalid member access to type %t.", root.type);
+                
             }
             break;
         case INCREMENT:
@@ -513,8 +513,8 @@ exprsize:   head = cfg_block_init(def);
                 block->expr = as_expr(value);
             }
         } else {
-            error("Cannot apply 'sizeof' to incomplete type.");
-            exit(1);
+            fatal("Cannot apply 'sizeof' to incomplete type.");
+            
         }
         break;
     case ALIGNOF:
@@ -1013,8 +1013,8 @@ INTERNAL struct var constant_expression(void)
 
     tail = conditional_expression(NULL, head);
     if (tail != head || !is_immediate(tail->expr)) {
-        error("Constant expression must be computable at compile time.");
-        exit(1);
+        fatal("Constant expression must be computable at compile time.");
+        
     }
 
     return eval(NULL, tail, tail->expr);

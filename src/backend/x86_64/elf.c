@@ -691,8 +691,7 @@ static void write_data(const void *ptr, size_t size)
 
     b = fwrite(ptr, 1, size, object_file_output);
     if (b != size) {
-        fprintf(stderr, "Write failed with %lu out of %lu bytes.\n", b, size);
-        exit(1);
+        fatal("Write failed with %lu out of %lu bytes.\n", b, size);
     }
 }
 

@@ -187,8 +187,8 @@ static struct registr reg(enum reg r, int w)
 static int displacement_from_offset(size_t offset)
 {
     if (offset > INT_MAX) {
-        error("Offset %lu exceeds limit of %d\n", offset, INT_MAX);
-        exit(1);
+        fatal("Offset %lu exceeds limit of %d\n", offset, INT_MAX);
+        
     }
 
     return (int) offset;
@@ -1505,8 +1505,8 @@ static void allocate_asmblock_registers(
                 } while (*int_regs <= TEMP_INT_REGS
                     && clobbered[temp_int_reg[*int_regs - 1] - 1]);
                 if (*int_regs > TEMP_INT_REGS) {
-                    error("Insufficient registers to honor __asm__ constraint.");
-                    exit(1);
+                    fatal("Insufficient registers to honor __asm__ constraint.");
+                    
                 }
                 sym->slot = *int_regs;
             } else {
@@ -1516,8 +1516,8 @@ static void allocate_asmblock_registers(
                 } while (*sse_regs <= TEMP_SSE_REGS
                     && clobbered[temp_sse_reg[*sse_regs - 1] - 1]);
                 if (*sse_regs > TEMP_SSE_REGS) {
-                    error("Insufficient registers to honor __asm__ constraint.");
-                    exit(1);
+                    fatal("Insufficient registers to honor __asm__ constraint.");
+                    
                 }
                 sym->slot = *sse_regs;
             }
@@ -2415,7 +2415,12 @@ static enum reg compile_neg(
     } else {
         assert(is_double(l.type));
         if (!c64) {
-            num.u = 1ul << 63;
+#ifdef _WIN32
+			num.u = 1ULL << 63;
+#else
+			num.u = 1ul << 63;
+#endif // _WIN32
+
             c64 = sym_create_constant(basic_type__double, num);
         }
         val = var_direct(c64);

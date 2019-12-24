@@ -104,16 +104,16 @@ static struct asm_token asmtok(const char *line, const char **endptr)
             line = ptr;
             t.val = strtol(ptr, (char **) &ptr, 10);
             if (t.val < 0 || t.val >= array_len(&operands)) {
-                error("Invalid operand reference, %ld is out of range.", t.val);
-                exit(1);
+                fatal("Invalid operand reference, %ld is out of range.", t.val);
+                
             }
         } else if (ptr[1] == '[') {
             ptr += 2;
             for (i = 0; ptr[i] && ptr[i] != ']'; i++)
                 ;
             if (!ptr[i]) {
-                error("Invalid symbolic reference, missing trailing ']'.");
-                exit(1);
+                fatal("Invalid symbolic reference, missing trailing ']'.");
+                
             }
             len = i;
             for (i = 0; i < array_len(&operands); ++i) {
@@ -128,8 +128,8 @@ static struct asm_token asmtok(const char *line, const char **endptr)
                 }
             }
             if (i == array_len(&operands)) {
-                error("Symbolic reference does not match any operand.");
-                exit(1);
+                fatal("Symbolic reference does not match any operand.");
+                
             }
         } else if (ptr[1] == 'l') {
             t.type = ASM_LABEL;
@@ -137,14 +137,14 @@ static struct asm_token asmtok(const char *line, const char **endptr)
             t.val = strtol(ptr, (char **) &ptr, 10);
             t.val -= array_len(&operands);
             if (t.val < 0 || t.val >= array_len(&targets)) {
-                error("Invalid label reference.");
-                exit(1);
+                fatal("Invalid label reference.");
+                
             }
         } else goto fail;
         break;
     default: fail:
-        error("Unexpected token %s.", line);
-        exit(1);
+        fatal("Unexpected token %s.", line);
+        
         break;
     }
 
@@ -189,8 +189,8 @@ static enum reg parse_asm_int_reg(const char *str, size_t len, int *w)
         }
     }
 
-    error("Invalid assembly register %s.", str);
-    exit(1);
+    fatal("Invalid assembly register %s.", str);
+    
 }
 
 static struct registr parse__asm__register(const char *str, size_t len)
@@ -205,8 +205,8 @@ static struct registr parse__asm__register(const char *str, size_t len)
             reg.width = 0; /* either 4 or 8 */
             reg.r = XMM0 + d;
         } else {
-            error("Invalid SSE register.");
-            exit(1);
+            fatal("Invalid SSE register.");
+            
         }
     } else {
         reg.r = parse_asm_int_reg(str, len, &reg.width);
@@ -264,8 +264,8 @@ static int parse_asm_address(
         asmop = array_get(&operands, t.val);
         opt = allocation(asmop.variable, &op);
         if (opt != OPT_REG) {
-            error("Operand %ld must be register allocated.", t.val);
-            exit(1);
+            fatal("Operand %ld must be register allocated.", t.val);
+            
         }
         addr->base = op.reg.r;
     } else if (t.type != ',') {
@@ -308,14 +308,14 @@ static enum instr_optype parse__asm__operand(
         op->mem.addr.displacement = t.val;
         t = asmtok(line, &line);
         if (t.type != '(') {
-            error("Expected '(' after displacement in address operand.");
-            exit(1);
+            fatal("Expected '(' after displacement in address operand.");
+            
         }
     case '(':
         opt = OPT_MEM;
         if (!parse_asm_address(line, &line, &op->mem.addr)) {
-            error("Invalid memory address operand.");
-            exit(1);
+            fatal("Invalid memory address operand.");
+            
         }
         break;
     case ASM_CONSTANT:
@@ -342,8 +342,8 @@ static enum instr_optype parse__asm__operand(
         op->imm.width = 8;
         break;
     default:
-        error("Invalid assembly operand %s.", line);
-        exit(1);
+        fatal("Invalid assembly operand %s.", line);
+        
         break;
     }
 
@@ -381,15 +381,15 @@ static struct instruction parse__asm__instruction(
             } else if (opt1 == OPT_IMM && opt2 == OPT_MEM) {
                 instr.optype = OPT_IMM_MEM;
             } else {
-                error("Invalid combination of operands.");
-                exit(1);
+                fatal("Invalid combination of operands.");
+                
             }
         }
     }
 
     if (!mnemonic_match_operands(t.str, t.len, &instr)) {
-        error("Unrecognized instruction %s", t.str);
-        exit(1);
+        fatal("Unrecognized instruction %s", t.str);
+        
     }
 
     *endptr = line;
@@ -438,8 +438,8 @@ INTERNAL int assemble_inline(
             emit(instr);
             skip_whitespace(ptr, &ptr);
             if (*ptr) {
-                error("Stray token at end of assembly instruction.");
-                exit(1);
+                fatal("Stray token at end of assembly instruction.");
+                
             }
         }
     }

@@ -195,8 +195,8 @@ INTERNAL void include_system_file(const char *name)
     if (source.file) {
         push_file(source);
     } else {
-        error("Unable to resolve include file '%s'.", name);
-        exit(1);
+        fatal("Unable to resolve include file '%s'.", name);
+        
     }
 }
 
@@ -260,8 +260,8 @@ INTERNAL void set_input_file(const char *path)
             source.dirlen = sep - path;
         }
         if (!source.file) {
-            error("Unable to open file %s.", path);
-            exit(1);
+            fatal("Unable to open file %s.", path);
+            
         }
     } else {
         source.file = stdin;
@@ -375,8 +375,8 @@ static size_t read_literal(const char *line, char **buf, int *lines)
                 end += 1;
                 continue;
             } else {
-                error("Unexpected newline in literal.");
-                exit(1);
+                fatal("Unexpected newline in literal.");
+                
             }
             break;
         case '?':
@@ -513,8 +513,8 @@ static char *initial_preprocess_line(struct source *fn)
         if (fn->processed == fn->read || !fn->processed) {
             if (feof(fn->file)) {
                 if (fn->read > fn->processed) {
-                    error("Unable to process the whole input.");
-                    exit(1);
+                    fatal("Unable to process the whole input.");
+                    
                 }
                 return NULL;
             }

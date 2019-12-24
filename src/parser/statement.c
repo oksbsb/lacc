@@ -328,8 +328,8 @@ static struct block *switch_statement(
     value = eval(def, parent, parent->expr);
     parent->expr = as_expr(value);
     if (!is_integer(value.type)) {
-        error("Switch expression must have integer type, was %t.", value.type);
-        exit(1);
+        fatal("Switch expression must have integer type, was %t.", value.type);
+        
     }
 
     consume(')');
@@ -395,16 +395,16 @@ static struct asm_operand asm_operand(
     var = eval(def, *block, (*block)->expr);
     if (str[0] == '=' || str[0] == '+') {
         if (!writeback) {
-            error("Input operand cannot be writeable.");
-            exit(1);
+            fatal("Input operand cannot be writeable.");
+            
         }
         if (!var.lvalue) {
-            error("Output operand must be lvalue.");
-            exit(1);
+            fatal("Output operand must be lvalue.");
+            
         }
     } else if (writeback) {
-        error("Output operand constraint must begin with '=' or '+'.");
-        exit(1);
+        fatal("Output operand constraint must begin with '=' or '+'.");
+        
     } else {
         var = rvalue(def, *block, var);
     }

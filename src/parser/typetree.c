@@ -216,8 +216,8 @@ static struct member *add_member(Type parent, struct member m)
     }
 
     if (m.name.len && find_type_member(parent, m.name, NULL)) {
-        error("Member '%s' already exists.", str_raw(m.name));
-        exit(1);
+        fatal("Member '%s' already exists.", str_raw(m.name));
+        
     }
 
     array_push_back(&t->members, m);
@@ -226,20 +226,20 @@ static struct member *add_member(Type parent, struct member m)
             if (is_array(m.type) && !t->is_flexible) {
                 t->is_flexible = 1;
             } else {
-                error("Member '%s' has incomplete type.", str_raw(m.name));
-                exit(1);
+                fatal("Member '%s' has incomplete type.", str_raw(m.name));
+                
             }
         }
         if (is_flexible(m.type)) {
             if (is_struct(parent)) {
-                error("Cannot add flexible struct member.");
-                exit(1);
+                fatal("Cannot add flexible struct member.");
+                
             }
             t->is_flexible = 1;
         }
         if (LONG_MAX - m.offset < size_of(m.type)) {
-            error("Object is too large.");
-            exit(1);
+            fatal("Object is too large.");
+            
         }
         if (t->size < m.offset + size_of(m.type)) {
             t->size = m.offset + size_of(m.type);
@@ -409,8 +409,8 @@ INTERNAL Type type_create_array(Type next, size_t count)
     struct typetree *t;
 
     if (count * size_of(next) > LONG_MAX) {
-        error("Array is too large (%lu elements).", count);
-        exit(1);
+        fatal("Array is too large (%lu elements).", count);
+        
     }
 
     type = type_create(T_ARRAY);
@@ -470,8 +470,8 @@ INTERNAL Type type_set_volatile(Type type)
 INTERNAL Type type_set_restrict(Type type)
 {
     if (!is_pointer(type)) {
-        error("Cannot apply 'restrict' qualifier to non-pointer types.");
-        exit(1);
+        fatal("Cannot apply 'restrict' qualifier to non-pointer types.");
+        
     }
 
     if (type.is_pointer) {
@@ -702,14 +702,14 @@ INTERNAL void type_add_field(Type parent, String name, Type type, size_t width)
     assert(is_integer(type));
 
     if (width > (size_of(type) << 3) || (is_bool(type) && width > 1)) {
-        error("Width of bit-field (%lu bits) exceeds width of type %t.",
+        fatal("Width of bit-field (%lu bits) exceeds width of type %t.",
             width, type);
-        exit(1);
+        
     }
 
     if (name.len && !width) {
-        error("Zero length field %s.", str_raw(name));
-        exit(1);
+        fatal("Zero length field %s.", str_raw(name));
+        
     }
 
     if (is_union(parent) && name.len == 0) {
@@ -810,9 +810,9 @@ INTERNAL void type_seal(Type type)
         assert(is_struct_or_union(type));
         align = remove_anonymous_fields(t);
         if (align == 0) {
-            error("%s has no named members.",
+            fatal("%s has no named members.",
                 is_struct(type) ? "Struct" : "Union");
-            exit(1);
+            
         }
 
         if (t->size % align) {

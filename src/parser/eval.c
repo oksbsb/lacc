@@ -41,8 +41,8 @@ static int extract_literal_char(struct var v)
     str = v.symbol->value.string;
     raw = str_raw(str);
     if (v.offset >= str.len) {
-        error("Access outside bounds of string literal.");
-        exit(1);
+        fatal("Access outside bounds of string literal.");
+        
     }
 
     return raw[v.offset];
@@ -467,13 +467,13 @@ static struct expression cast(struct var var, Type type)
         return as_expr(var_void());
 
     if (!is_scalar(var.type) || !is_scalar(type)) {
-        error("Cannot cast %t to %t.", var.type, type);
-        exit(1);
+        fatal("Cannot cast %t to %t.", var.type, type);
+        
     }
 
     if (is_pointer(var.type) && (is_float(type) || is_double(type))) {
-        error("Cannot cast pointer to %t", type);
-        exit(1);
+        fatal("Cannot cast pointer to %t", type);
+        
     }
 
     if (var.kind == IMMEDIATE) {
@@ -561,8 +561,8 @@ static struct expression mod(
 
     type = usual_arithmetic_conversion(l.type, r.type);
     if (!is_integer(type)) {
-        error("Operands of modulo operator must be of integer type.");
-        exit(1);
+        fatal("Operands of modulo operator must be of integer type.");
+        
     }
 
     l = eval_cast(def, block, l, type);
@@ -626,8 +626,8 @@ static struct expression add(
             expr = create_expr(IR_OP_ADD, l, eval(def, block, expr));
             expr.type = type;
         } else if (!size) {
-            error("Pointer arithmetic on incomplete type %t.", l.type);
-            exit(1);
+            fatal("Pointer arithmetic on incomplete type %t.", l.type);
+            
         } else if (l.kind == ADDRESS && r.kind == IMMEDIATE) {
             l.offset += r.imm.i * size;
             expr = as_expr(l);
@@ -648,9 +648,9 @@ static struct expression add(
             expr = as_expr(l);
         }
     } else {
-        error("Incompatible arguments to addition operator, was '%t' and '%t'.",
+        fatal("Incompatible arguments to addition operator, was '%t' and '%t'.",
             l.type, r.type);
-        exit(1);
+        
     }
 
     return expr;
@@ -701,8 +701,8 @@ static struct expression sub(
             expr = create_expr(IR_OP_SUB, l, eval(def, block, expr));
             expr.type = type;
         } else if (!size) {
-            error("Pointer arithmetic on incomplete type.");
-            exit(1);
+            fatal("Pointer arithmetic on incomplete type.");
+            
         } else if (l.kind == ADDRESS && r.kind == IMMEDIATE) {
             l.offset -= r.imm.i * size;
             expr = as_expr(l);
@@ -735,13 +735,13 @@ static struct expression sub(
             r = imm_signed(basic_type__long, size);
             expr = eval_expr(def, block, IR_OP_DIV, l, r);
         } else if (!size || size_of(t1) != size) {
-            error("Referenced type is incomplete.");
-            exit(1);
+            fatal("Referenced type is incomplete.");
+            
         }
     } else {
-        error("Incompatible arguments to subtraction operator, was %t and %t.",
+        fatal("Incompatible arguments to subtraction operator, was %t and %t.",
             l.type, r.type);
-        exit(1);
+        
     }
 
     return expr;
@@ -786,9 +786,9 @@ static void prepare_comparison_operands(
         *l = eval_cast(def, block, *l, basic_type__unsigned_long);
         *r = eval_cast(def, block, *r, basic_type__unsigned_long);
     } else {
-        error("Illegal comparison between types '%t' and '%t'.",
+        fatal("Illegal comparison between types '%t' and '%t'.",
             l->type, r->type);
-        exit(1);
+        
     }
 }
 
@@ -842,8 +842,8 @@ static Type common_compare_type(Type left, Type right)
         return basic_type__unsigned_long;
     }
 
-    error("Invalid operands in relational expression: %t and %t", left, right);
-    exit(1);
+    fatal("Invalid operands in relational expression: %t and %t", left, right);
+    
 }
 
 static struct expression cmp_ge(
@@ -900,8 +900,8 @@ static struct expression or(
     Type type;
 
     if (!is_integer(l.type) || !is_integer(r.type)) {
-        error("Operands to bitwise or must have integer type.");
-        exit(1);
+        fatal("Operands to bitwise or must have integer type.");
+        
     }
 
     type = usual_arithmetic_conversion(l.type, r.type);
@@ -927,8 +927,8 @@ static struct expression xor(
     Type type;
 
     if (!is_integer(l.type) || !is_integer(r.type)) {
-        error("Operands to bitwise xor must have integer type.");
-        exit(1);
+        fatal("Operands to bitwise xor must have integer type.");
+        
     }
 
     type = usual_arithmetic_conversion(l.type, r.type);
@@ -954,8 +954,8 @@ static struct expression and(
     Type type;
 
     if (!is_integer(l.type) || !is_integer(r.type)) {
-        error("Operands to bitwise and must have integer type.");
-        exit(1);
+        fatal("Operands to bitwise and must have integer type.");
+        
     }
 
     type = usual_arithmetic_conversion(l.type, r.type);
@@ -981,8 +981,8 @@ static struct expression shiftl(
     Type type;
 
     if (!is_integer(l.type) || !is_integer(r.type)) {
-        error("Shift operands must have integer type.");
-        exit(1);
+        fatal("Shift operands must have integer type.");
+        
     }
 
     type = promote_integer(l.type);
@@ -1007,8 +1007,8 @@ static struct expression shiftr(
     Type type;
 
     if (!is_integer(l.type) || !is_integer(r.type)) {
-        error("Shift operands must have integer type.");
-        exit(1);
+        fatal("Shift operands must have integer type.");
+        
     }
 
     type = promote_integer(l.type);
@@ -1032,8 +1032,8 @@ static struct expression not(
     Type type;
 
     if (!is_integer(var.type)) {
-        error("Bitwise complement operand must have integer type.");
-        exit(1);
+        fatal("Bitwise complement operand must have integer type.");
+        
     }
 
     type = promote_integer(var.type);
@@ -1061,8 +1061,8 @@ static struct expression neg(
     struct expression expr;
 
     if (!is_arithmetic(var.type)) {
-        error("Unary (-) operand must be of arithmetic type.");
-        exit(1);
+        fatal("Unary (-) operand must be of arithmetic type.");
+        
     }
 
     if (is_float(var.type)) {
@@ -1089,8 +1089,8 @@ static struct expression neg(
 static struct expression call(struct var var)
 {
     if (!is_pointer(var.type) || !is_function(type_next(var.type))) {
-        error("Calling non-function type %t.", var.type);
-        exit(1);
+        fatal("Calling non-function type %t.", var.type);
+        
     }
 
     return create_expr(IR_OP_CALL, var);
@@ -1163,8 +1163,8 @@ INTERNAL struct block *scalar(
     }
 
     if (!is_scalar(block->expr.type)) {
-        error("%s must be scalar, was %t", entity, block->expr.type);
-        exit(1);
+        fatal("%s must be scalar, was %t", entity, block->expr.type);
+        
     }
 
     if (block->expr.op == IR_OP_VA_ARG) {
@@ -1233,8 +1233,8 @@ INTERNAL struct expression eval_unary_plus(struct var val)
     Type type;
 
     if (!is_arithmetic(val.type)) {
-        error("Unary (+) operand must be of arithmetic type.");
-        exit(1);
+        fatal("Unary (+) operand must be of arithmetic type.");
+        
     }
 
     if (is_integer(val.type)) {
@@ -1254,8 +1254,8 @@ INTERNAL struct var eval_addr(
     struct var tmp, ptr;
 
     if (is_field(var)) {
-        error("Cannot take address of bit-field.");
-        exit(1);
+        fatal("Cannot take address of bit-field.");
+        
     }
 
     if (is_vla(var.type) && var.kind == DIRECT) {
@@ -1268,8 +1268,8 @@ INTERNAL struct var eval_addr(
     switch (var.kind) {
     case IMMEDIATE:
         if (!var.symbol || var.symbol->symtype != SYM_LITERAL) {
-            error("Cannot take address of immediate of type '%t'.", var.type);
-            exit(1);
+            fatal("Cannot take address of immediate of type '%t'.", var.type);
+            
         }
         /*
          * Address of string literal can be done without evaluation,
@@ -1292,8 +1292,8 @@ INTERNAL struct var eval_addr(
         }
     case ADDRESS:
         assert(!var.lvalue);
-        error("Cannot take address of r-value.");
-        exit(1);
+        fatal("Cannot take address of r-value.");
+        
         break;
     case DEREF:
         if (!var.symbol) {
@@ -1337,8 +1337,8 @@ INTERNAL struct var eval_deref(
 {
     var = rvalue(def, block, var);
     if (!is_pointer(var.type)) {
-        error("Dereferencing non-pointer type '%t'.", var.type);
-        exit(1);
+        fatal("Dereferencing non-pointer type '%t'.", var.type);
+        
     }
 
     switch (var.kind) {
@@ -1420,8 +1420,8 @@ static struct var eval_assign_string_literal(
     assert(is_array(target.type));
     assert(expr.l.symbol->symtype == SYM_LITERAL);
     if (!is_char(type_next(target.type))) {
-        error("Assigning string literal to non-char array.");
-        exit(1);
+        fatal("Assigning string literal to non-char array.");
+        
     }
 
     if (!size_of(target.type)) {
@@ -1436,8 +1436,8 @@ static struct var eval_assign_string_literal(
             expr.type = target.type;
             expr.l.type = target.type;
         } else if (size_of(expr.type) > size_of(target.type)) {
-            error("Length of string literal exceeds target array size.");
-            exit(1);
+            fatal("Length of string literal exceeds target array size.");
+            
         }
 
         type = target.type;
@@ -1487,7 +1487,12 @@ static struct var assign_field(
         mask = (1l << target.field_width) - 1;
         expr.l.imm.i &= mask;
         if (is_signed(target.type)
-            && (expr.l.imm.i & (1l << (target.field_width - 1))))
+#ifdef _WIN32
+			&& (expr.l.imm.i & (1ll << (target.field_width - 1))))
+#else
+			&& (expr.l.imm.i & (1l << (target.field_width - 1))))
+#endif // _WIN32
+
         {
             expr.l.imm.i |= ~mask;
         }
@@ -1537,9 +1542,9 @@ static struct var eval_assign_pointer(
             warning("Assigning non-zero number to pointer.");
         }
     } else {
-        error("Incompatible pointer assignment between %t and %t.",
+        fatal("Incompatible pointer assignment between %t and %t.",
             target.type, expr.type);
-        exit(1);
+        
     }
 
     if (is_identity(expr)) {
@@ -1586,8 +1591,8 @@ INTERNAL struct var eval_assign(
     struct var var;
 
     if (!target.lvalue) {
-        error("Target of assignment must be l-value.");
-        exit(1);
+        fatal("Target of assignment must be l-value.");
+        
     }
 
     if (is_array(target.type)) {
@@ -1619,9 +1624,9 @@ INTERNAL struct var eval_assign(
         !(is_struct_or_union(target.type)
             && is_compatible_unqualified(target.type, expr.type)))
     {
-        error("Incompatible value of type %t assigned to variable of type %t.",
+        fatal("Incompatible value of type %t assigned to variable of type %t.",
             expr.type, target.type);
-        exit(1);
+        
     }
 
     emit_ir(block, IR_ASSIGN, target, expr);
@@ -1703,8 +1708,8 @@ INTERNAL Type eval_conditional(
         } else if (is_void(p2)) {
             type = type_apply_qualifiers(p2, p1);
         } else {
-            error("Incompatible pointer types in conditional expression.");
-            exit(1);
+            fatal("Incompatible pointer types in conditional expression.");
+            
         }
 
         type = type_create_pointer(type);
@@ -1719,8 +1724,8 @@ INTERNAL Type eval_conditional(
     } else if (is_struct_or_union(t1) && type_equal(t1, t2)) {
         type = t1;
     } else {
-        error("Incompatible types (%t, %t) in conditional operator.", t1, t2);
-        exit(1);
+        fatal("Incompatible types (%t, %t) in conditional operator.", t1, t2);
+        
     }
 
     return type;

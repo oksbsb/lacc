@@ -95,20 +95,20 @@ static void read_Pragma_invocation(TokenArray *line)
 
     t = read_through_newline(line);
     if (t != '(') {
-        error("Expected '(' after _Pragma.");
-        exit(1);
+        fatal("Expected '(' after _Pragma.");
+        
     }
 
     t = read_through_newline(line);
     if (t != STRING && t != PREP_STRING) {
-        error("Invalid argument to _Pragma operator, expected string.");
-        exit(1);
+        fatal("Invalid argument to _Pragma operator, expected string.");
+        
     }
 
     t = read_through_newline(line);
     if (t != ')') {
-        error("Expected ')' to complete _Pragma expression.");
-        exit(1);
+        fatal("Expected ')' to complete _Pragma expression.");
+        
     }
 }
 
@@ -156,8 +156,8 @@ static void read_macro_invocation(TokenArray *line, const struct macro *macro)
     }
 
     if (nesting) {
-        error("Unbalanced invocation of macro '%s'.", str_raw(macro->name));
-        exit(1);
+        fatal("Unbalanced invocation of macro '%s'.", str_raw(macro->name));
+        
     }
 }
 
@@ -174,9 +174,9 @@ static void read_defined_operator(TokenArray *line)
     }
 
     if (!t.is_expandable) {
-        error("Expected identifier in 'defined' clause, but got '%s'",
+        fatal("Expected identifier in 'defined' clause, but got '%s'",
             str_raw(t.d.string));
-        exit(1);
+        
     }
 
     if (macro_definition(t.d.string))
@@ -188,8 +188,8 @@ static void read_defined_operator(TokenArray *line)
     if (is_parens) {
         t = get_token();
         if (t.token != ')') {
-            error("Expected ')' to close 'defined' clause.");
-            exit(1);
+            fatal("Expected ')' to close 'defined' clause.");
+            
         }
     }
 }
@@ -355,15 +355,15 @@ static const char *stringify_token(const struct token *t)
     case NUMBER:
         if (is_unsigned(t->type)) {
             if (size_of(t->type) == 8) {
-                sprintf(buf, "%luul", t->d.val.u);
+                sprintf(buf, "%llu", t->d.val.u);
             } else {
-                sprintf(buf, "%luu", t->d.val.u);
+                sprintf(buf, "%luu", (unsigned int) t->d.val.u);
             }
         } else if (is_signed(t->type)) {
             if (size_of(t->type) == 8) {
-                sprintf(buf, "%ldl", t->d.val.i);
+                sprintf(buf, "%lld", t->d.val.i);
             } else {
-                sprintf(buf, "%ld", t->d.val.i);
+                sprintf(buf, "%ld", (int)t->d.val.i);
             }
         } else if (is_float(t->type)) {
             sprintf(buf, "%ff", t->d.val.f);
@@ -528,8 +528,8 @@ static int preprocess_Pragma(TokenArray *line, int i, TokenArray *pragma)
             && array_get(line, i + 2).token != PREP_STRING)
         || array_get(line, i + 3).token != ')')
     {
-        error("Wrong application of _Pragma operator.");
-        exit(1);
+        fatal("Wrong application of _Pragma operator.");
+        
     }
 
     array_push_back(pragma, ident__pragma);
@@ -666,8 +666,8 @@ INTERNAL struct token consume(enum token_type type)
             break;
         }
 
-        error("Expected %s but got %s.", str, stringify_token(&t));
-        exit(1);
+        fatal("Expected %s but got %s.", str, stringify_token(&t));
+        
     }
 
     return t;

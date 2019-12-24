@@ -22,7 +22,12 @@ static unsigned QWORD set_def_bit(struct var var)
     switch (var.kind) {
     case DIRECT:
         if (is_scalar(var.symbol->type) && var.symbol->index) {
-            return 1ul << (var.symbol->index - 1);
+#ifdef _WIN32
+			return 1ULL << (var.symbol->index - 1);
+#else
+			return 1ul << (var.symbol->index - 1);
+#endif // _WIN32
+
         }
     default:
         return 0;
@@ -44,7 +49,13 @@ static unsigned QWORD set_use_bit(struct var var)
     case ADDRESS:
         if (is_object(var.symbol->type)) {
             assert(var.symbol->index);
-            return 1ul << (var.symbol->index - 1);
+
+#ifdef _WIN32
+			return 1ULL << (var.symbol->index - 1);
+#else
+			return 1ul << (var.symbol->index - 1);
+#endif // _WIN32
+			
         }
         break;
     case IMMEDIATE:
@@ -52,7 +63,13 @@ static unsigned QWORD set_use_bit(struct var var)
             assert(var.symbol->symtype == SYM_LITERAL
                 || var.symbol->symtype == SYM_CONSTANT);
             assert(var.symbol->index);
-            return 1ul << (var.symbol->index - 1);
+
+#ifdef _WIN32
+			return 1ULL << (var.symbol->index - 1);
+#else
+			return 1ul << (var.symbol->index - 1);
+#endif // _WIN32
+			
         }
         break;
     }

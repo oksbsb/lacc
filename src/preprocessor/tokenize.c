@@ -272,9 +272,9 @@ INTERNAL struct token convert_preprocessing_number(struct token t)
         if (errno == ERANGE) {
             error("Numeric literal '%s' is out of range.", str);
         } else {
-            error("Invalid numeric literal '%s'.", str);
+            fatal("Invalid numeric literal '%s'.", str);
         }
-        exit(1);
+        
     }
 
     return tok;
@@ -303,8 +303,8 @@ static char convert_escape_sequence(const char *in, const char **endptr)
     case '\\': return '\\';
     case 'x':
         if (!isxdigit(in[1])) {
-            error("Empty hexadecimal escape sequence.");
-            exit(1);
+            fatal("Empty hexadecimal escape sequence.");
+            
         }
         return (char) strtol(&in[1], (char **) endptr, 16);
     case '0':
@@ -323,8 +323,8 @@ static char convert_escape_sequence(const char *in, const char **endptr)
         *endptr = in + i;
         return (char) n;
     default:
-        error("Invalid escape sequence '\\%c'.", *in);
-        exit(1);
+        fatal("Invalid escape sequence '\\%c'.", *in);
+        
     }
 }
 
@@ -447,13 +447,13 @@ static struct token strtochar(const char *in, const char **endptr)
     } else if (*in != '\'') {
         in++;
     } else {
-        error("Empty character constant.");
-        exit(1);
+        fatal("Empty character constant.");
+        
     }
 
     if (*in != '\'') {
-        error("Multi-character constants are not supported.");
-        exit(1);
+        fatal("Multi-character constants are not supported.");
+        
     }
 
     tok.d.string = str_register(start, in - start);
@@ -711,8 +711,8 @@ static struct token strtoop(const char *in, const char **endptr)
     *endptr = start + 1;
     t = basic_token[(int) *start];
     if (t.token == END) {
-        error("Unknown token '%c'", (int) *start);
-        exit(1);
+        fatal("Unknown token '%c'", (int) *start);
+        
     }
 
     return t;

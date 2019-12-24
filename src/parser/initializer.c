@@ -96,8 +96,8 @@ static struct block *read_initializer_element(
     top = block;
     block = assignment_expression(def, block);
     if (is_void(block->expr.type)) {
-        error("Cannot initialize with void value.");
-        exit(1);
+        fatal("Cannot initialize with void value.");
+        
     }
 
     if (sym->linkage != LINK_NONE) {
@@ -106,8 +106,8 @@ static struct block *read_initializer_element(
             || !is_identity(block->expr)
             || !is_loadtime_constant(block->expr))
         {
-            error("Initializer must be computable at load time.");
-            exit(1);
+            fatal("Initializer must be computable at load time.");
+            
         }
     } else if (block->expr.op == IR_OP_CALL) {
         tmp = create_var(def, block->expr.type);
@@ -166,8 +166,8 @@ static const struct member *get_named_member(
 
     member = find_type_member(type, name, i);
     if (member == NULL) {
-        error("%t has no member named %s.", type, str_raw(name));
-        exit(1);
+        fatal("%t has no member named %s.", type, str_raw(name));
+        
     }
 
     return member;
@@ -375,8 +375,8 @@ static int try_parse_index(size_t *index)
         next();
         num = constant_expression();
         if (!is_integer(num.type)) {
-            error("Array designator must have integer value.");
-            exit(1);
+            fatal("Array designator must have integer value.");
+            
         }
         consume(']');
         *index = num.imm.i;
@@ -521,8 +521,8 @@ static struct block *initialize_member(
         }
     } else if (is_array(target.type)) {
         if (!size_of(target.type)) {
-            error("Invalid initialization of flexible array member.");
-            exit(1);
+            fatal("Invalid initialization of flexible array member.");
+            
         }
         if (!block->has_init_value && peek().token == '{') {
             next();
@@ -633,8 +633,8 @@ static void zero_initialize(
         eval_assign(def, values, target, as_expr(var));
         break;
     default:
-        error("Cannot zero-initialize object of type '%t'.", target.type);
-        exit(1);
+        fatal("Cannot zero-initialize object of type '%t'.", target.type);
+        
     }
 }
 

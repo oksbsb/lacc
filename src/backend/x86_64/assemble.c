@@ -160,7 +160,7 @@ static const char *immediate(struct immediate imm)
                 (imm.width == 1) ? imm.d.byte :
                 (imm.width == 2) ? imm.d.word : imm.d.dword);
         } else {
-            sprintf(buf, "$%ld", imm.d.qword);
+            sprintf(buf, "$%llx", imm.d.qword);
         }
 
         return buf;

@@ -51,10 +51,10 @@ static int vfprintf_cc(FILE *stream, const char *format, va_list ap)
                 switch (c) {
                 default: assert(0);
                 case 'u':
-                    n += fprintf(stream, "%lu", va_arg(ap, unsigned QWORD));
+                    n += fprintf(stream, "%llu", va_arg(ap, unsigned QWORD));
                     break;
                 case 'd':
-                    n += fprintf(stream, "%ld", va_arg(ap, QWORD));
+                    n += fprintf(stream, "%lld", va_arg(ap, QWORD));
                     break;
                 }
                 break;
@@ -112,4 +112,22 @@ INTERNAL void error(const char *format, ...)
     vfprintf_cc(stderr, format, args);
     fputc('\n', stderr);
     va_end(args);
+}
+
+INTERNAL void fatal(const char *format, ...)
+{
+	va_list args;
+
+	context.errors++;
+	va_start(args, format);
+	fprintf(
+		stderr,
+		"(%s, %d) error: ",
+		str_raw(current_file_path),
+		current_file_line);
+	vfprintf_cc(stderr, format, args);
+	fputc('\n', stderr);
+	va_end(args);
+
+	exit(1);
 }

@@ -255,8 +255,8 @@ INTERNAL const char *sym_name(const struct symbol *sym)
     }
 
     if (strlen(raw) > 100) {
-        error("Symbol name %s exceeds limit.", raw);
-        exit(1);
+        fatal("Symbol name %s exceeds limit.", raw);
+        
     }
 
     /*
@@ -306,8 +306,8 @@ static void sym_apply_type(struct symbol *sym, Type type)
     }
 
     if (!type_equal(sym->type, type)) {
-        error("'%s' declared with different types.", sym_name(sym));
-        exit(1);
+        fatal("'%s' declared with different types.", sym_name(sym));
+        
     }
 }
 
@@ -324,23 +324,23 @@ static struct symbol *sym_redeclare(
     switch (linkage) {
     case LINK_INTERN:
         if (sym->linkage == LINK_EXTERN) {
-            error("'%s' was previously defined non-static.", sym_name(sym));
-            exit(1);
+            fatal("'%s' was previously defined non-static.", sym_name(sym));
+            
         }
         sym->linkage = LINK_INTERN;
         break;
     case LINK_EXTERN:
         if (sym->linkage == LINK_INTERN) {
             if (symtype == SYM_DEFINITION || symtype == SYM_TENTATIVE) {
-                error("'%s' was previously declared static.", sym_name(sym));
-                exit(1);
+                fatal("'%s' was previously declared static.", sym_name(sym));
+                
             }
         }
         break;
     case LINK_NONE:
         if (sym->depth == current_scope_depth(ns) && sym->depth) {
-            error("Duplicate definition of '%s'.", sym_name(sym));
-            exit(1);
+            fatal("Duplicate definition of '%s'.", sym_name(sym));
+            
         }
         break;
     }
@@ -353,8 +353,8 @@ static struct symbol *sym_redeclare(
     case SYM_DECLARATION:
         if (sym->symtype == SYM_DEFINITION) {
             if (!type_equal(sym->type, type)) {
-                error("'%s' redeclared with different type.", sym_name(sym));
-                exit(1);
+                fatal("'%s' redeclared with different type.", sym_name(sym));
+                
             }
         } else {
             sym_apply_type(sym, type);
@@ -368,8 +368,8 @@ static struct symbol *sym_redeclare(
     case SYM_TYPEDEF:
     case SYM_CONSTANT:
         if (sym->symtype != symtype || !type_equal(sym->type, type)) {
-            error("Conflicting declaration of '%s'.", sym_name(sym));
-            exit(1);
+            fatal("Conflicting declaration of '%s'.", sym_name(sym));
+            
         }
         break;
     case SYM_LABEL:
@@ -664,9 +664,9 @@ static void print_symbol(FILE *stream, const struct symbol *sym)
 
     if (sym->symtype == SYM_CONSTANT) {
         if (is_signed(sym->type)) {
-            fprintf(stream, ", value=%ld", sym->value.constant.i);
+            fprintf(stream, ", value=%lld", sym->value.constant.i);
         } else if (is_unsigned(sym->type)) {
-            fprintf(stream, ", value=%lu", sym->value.constant.u);
+            fprintf(stream, ", value=%llu", sym->value.constant.u);
         } else if (is_float(sym->type)) {
             fprintf(stream, ", value=%ff", sym->value.constant.f);
         } else if (is_double(sym->type)) {

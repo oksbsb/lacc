@@ -82,8 +82,8 @@ static struct block *parameter_list(
         block = parameter_declarator(def, block, base, &base, &name, &length);
         if (is_void(base)) {
             if (nmembers(*func)) {
-                error("Incomplete type in parameter list.");
-                exit(1);
+                fatal("Incomplete type in parameter list.");
+                
             }
             type_seal(*func);
             break;
@@ -130,8 +130,8 @@ static Type identifier_list(Type base)
         while (1) {
             t = consume(IDENTIFIER);
             if (get_typedef(t.d.string)) {
-                error("Unexpected type '%t' in identifier list.");
-                exit(1);
+                fatal("Unexpected type '%t' in identifier list.");
+                
             }
             type_add_member(type, t.d.string, get_type_placeholder());
             if (peek().token == ',') {
@@ -220,8 +220,8 @@ static struct block *array_declarator(
             if (static_length) {
                 array_param_qualifiers(&cvrs);
                 if (cvrs.is_static && peek().token == ']') {
-                    error("Missing array length.");
-                    exit(1);
+                    fatal("Missing array length.");
+                    
                 }
             }
             if (peek().token != ']') {
@@ -235,12 +235,12 @@ static struct block *array_declarator(
 
     if (!is_incomplete) {
         if (!is_integer(val.type)) {
-            error("Array dimension must be of integer type.");
-            exit(1);
+            fatal("Array dimension must be of integer type.");
+            
         }
         if (val.kind == IMMEDIATE && is_signed(val.type) && val.imm.i < 0) {
-            error("Array dimension must be a positive number.");
-            exit(1);
+            fatal("Array dimension must be a positive number.");
+            
         }
 
         if (!type_equal(val.type, basic_type__unsigned_long)) {
@@ -270,8 +270,8 @@ static struct block *array_declarator(
     }
 
     if (!is_complete(base)) {
-        error("Array has incomplete element type.");
-        exit(1);
+        fatal("Array has incomplete element type.");
+        
     }
 
     if (static_length) {
@@ -317,8 +317,8 @@ static struct block *direct_declarator(
     case IDENTIFIER:
         t = next();
         if (!name) {
-            error("Unexpected identifier in abstract declarator.");
-            exit(1);
+            fatal("Unexpected identifier in abstract declarator.");
+            
         }
         *name = t.d.string;
         break;
@@ -430,22 +430,22 @@ static void member_declaration_list(Type type)
             declarator(NULL, NULL, decl_base, &decl_type, &name);
             if (is_struct_or_union(type) && peek().token == ':') {
                 if (!is_integer(decl_type)) {
-                    error("Unsupported type '%t' for bit-field.", decl_type);
-                    exit(1);
+                    fatal("Unsupported type '%t' for bit-field.", decl_type);
+                    
                 }
                 consume(':');
                 expr = constant_expression();
                 if (is_signed(expr.type) && expr.imm.i < 0) {
-                    error("Negative width in bit-field.");
-                    exit(1);
+                    fatal("Negative width in bit-field.");
+                    
                 }
                 type_add_field(type, name, decl_type, expr.imm.u);
             } else if (!name.len) {
                 if (is_struct_or_union(decl_type)) {
                     type_add_anonymous_member(type, decl_type);
                 } else {
-                    error("Missing name in member declarator.");
-                    exit(1);
+                    fatal("Missing name in member declarator.");
+                    
                 }
             } else {
                 type_add_member(type, name, decl_type);
@@ -482,19 +482,18 @@ static Type struct_or_union_declaration(enum token_type t)
             type = type_create(kind);
             sym = sym_add(&ns_tag, name, type, SYM_TAG, LINK_NONE);
         } else if (is_integer(sym->type)) {
-            error("Tag '%s' was previously declared as enum.",
+            fatal("Tag '%s' was previously declared as enum.",
                 str_raw(sym->name));
-            exit(1);
+            
         } else if (type_of(sym->type) != kind) {
-            error("Tag '%s' was previously declared as %s.",
+            fatal("Tag '%s' was previously declared as %s.",
                 str_raw(sym->name),
                 (is_struct(sym->type)) ? "struct" : "union");
-            exit(1);
         }
         type = sym->type;
         if (peek().token == '{' && size_of(type)) {
-            error("Redefiniton of '%s'.", str_raw(sym->name));
-            exit(1);
+            fatal("Redefiniton of '%s'.", str_raw(sym->name));
+            
         }
     }
 
@@ -507,8 +506,8 @@ static Type struct_or_union_declaration(enum token_type t)
         assert(size_of(type));
         consume('}');
     } else if (!sym) {
-        error("Invalid declaration.");
-        exit(1);
+        fatal("Invalid declaration.");
+        
     }
 
     return type;
@@ -571,14 +570,14 @@ static void enum_declaration(void)
                 SYM_TAG,
                 LINK_NONE);
         } else if (!is_integer(tag->type)) {
-            error("Tag '%s' was previously defined as aggregate type.",
+            fatal("Tag '%s' was previously defined as aggregate type.",
                 str_raw(tag->name));
-            exit(1);
+            
         }
         if (peek().token == '{') {
             if (tag->value.constant.i) {
-                error("Redefiniton of enum '%s'.", str_raw(tag->name));
-                exit(1);
+                fatal("Redefiniton of enum '%s'.", str_raw(tag->name));
+                
             }
             enumerator_list();
             tag->value.constant.i = 1;
@@ -910,8 +909,8 @@ static struct block *parameter_declaration_list(
     for (i = 0; i < nmembers(type); ++i) {
         param = get_member(type, i);
         if (!param->name.len) {
-            error("Missing parameter name at position %d.", i + 1);
-            exit(1);
+            fatal("Missing parameter name at position %d.", i + 1);
+            
         }
 
         assert(!param->sym);
@@ -947,8 +946,8 @@ static struct block *make_parameters_visible(
     for (i = 0; i < nmembers(def->symbol->type); ++i) {
         param = get_member(def->symbol->type, i);
         if (!param->name.len) {
-            error("Missing parameter at position %d.", i + 1);
-            exit(1);
+            fatal("Missing parameter at position %d.", i + 1);
+            
         }
 
         assert(param->sym);
@@ -1012,18 +1011,18 @@ static struct block *init_declarator(
         symtype = SYM_DECLARATION;
         linkage = (linkage == LINK_NONE) ? LINK_EXTERN : linkage;
         if (linkage == LINK_INTERN && current_scope_depth(&ns_ident)) {
-            error("Cannot declare static function in block scope.");
-            exit(1);
+            fatal("Cannot declare static function in block scope.");
+            
         }
     } else if (is_variably_modified(type)) {
         if (current_scope_depth(&ns_ident) == 0) {
-            error("Invalid variably modified type at file scope.");
-            exit(1);
+            fatal("Invalid variably modified type at file scope.");
+            
         } else if (linkage != LINK_NONE
             && !(is_pointer(type) && linkage == LINK_INTERN))
         {
-            error("Invalid linkage for block scoped variably modified type.");
-            exit(1);
+            fatal("Invalid linkage for block scoped variably modified type.");
+            
         }
     }
 
@@ -1045,8 +1044,8 @@ static struct block *init_declarator(
         if (param && is_type_placeholder(param->type)) {
             ((struct member *) param)->type = sym->type;
         } else {
-            error("Invalid parameter declaration of %s.", str_raw(name));
-            exit(1);
+            fatal("Invalid parameter declaration of %s.", str_raw(name));
+            
         }
         break;
     default:
@@ -1063,17 +1062,17 @@ static struct block *init_declarator(
     switch (peek().token) {
     case '=':
         if (sym->symtype == SYM_DECLARATION) {
-            error("Extern symbol '%s' cannot be initialized.",
+            fatal("Extern symbol '%s' cannot be initialized.",
                 str_raw(sym->name));
-            exit(1);
+            
         }
         if (!sym->depth && sym->symtype == SYM_DEFINITION) {
-            error("Symbol '%s' was already defined.", str_raw(sym->name));
-            exit(1);
+            fatal("Symbol '%s' was already defined.", str_raw(sym->name));
+            
         }
         if (is_vla(sym->type)) {
-            error("Variable length array cannot be initialized.");
-            exit(1);
+            fatal("Variable length array cannot be initialized.");
+            
         }
         consume('=');
         sym->symtype = SYM_DEFINITION;
@@ -1089,8 +1088,8 @@ static struct block *init_declarator(
     case REGISTER:
     case '{':
         if (sym->linkage == LINK_NONE) {
-            error("Unexpected linkage for %s.", sym_name(sym));
-            exit(1);
+            fatal("Unexpected linkage for %s.", sym_name(sym));
+            
         }
         if (is_function(sym->type)) {
             sym->symtype = SYM_DEFINITION;
@@ -1131,13 +1130,13 @@ static void static_assertion(void)
     message = consume(STRING).d.string;
 
     if (val.kind != IMMEDIATE || !is_integer(val.type)) {
-        error("Expression in static assertion must be an integer constant.");
-        exit(1);
+        fatal("Expression in static assertion must be an integer constant.");
+        
     }
 
     if (val.imm.i == 0) {
-        error(str_raw(message));
-        exit(1);
+        fatal(str_raw(message));
+        
     }
 
     consume(')');

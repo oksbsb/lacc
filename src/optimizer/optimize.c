@@ -204,7 +204,13 @@ static void print_liveness_statement(unsigned QWORD live)
     printf("--- {");
     for (j = 0, k = 0; j < array_len(&symbols); ++j) {
         sym = array_get(&symbols, j);
-        if (live & (1ul << (sym->index - 1))) {
+
+#ifdef _WIN32
+		if (live & (1ULL << (sym->index - 1))) {
+#else
+		if (live & (1ul << (sym->index - 1))) {
+#endif // _WIN32
+
             if (k) {
                 printf(", ");
             }
@@ -239,7 +245,11 @@ INTERNAL int is_live_after(const struct symbol *sym, const struct statement *st)
 {
     if (optimization_level && is_object(sym->type)) {
         assert(sym->index);
-        return (st->out & (1ul << (sym->index - 1))) != 0;
+#ifdef _WIN32
+		return (st->out & (1ULL << (sym->index - 1))) != 0;
+#else
+		return (st->out & (1ul << (sym->index - 1))) != 0;
+#endif // _WIN32
     }
 
     return 1;

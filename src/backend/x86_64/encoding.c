@@ -868,8 +868,8 @@ static struct encoding find_encoding(struct instruction instr)
         i++;
     } while (encodings[i].opc == instr.opcode);
 
-    error("Unsupported instruction.");
-    exit(1);
+    fatal("Unsupported instruction.");
+    
 }
 
 static int is_single_width(unsigned int w)
@@ -966,8 +966,8 @@ INTERNAL int mnemonic_match_operands(
             if (!ws) {
                 if (!wd) {
                     if (!sfx) {
-                        error("Unable to determine instruction operand width.");
-                        exit(1);
+                        fatal("Unable to determine instruction operand width.");
+                        
                     }
                     ws = wd = sfx;
                 } else {

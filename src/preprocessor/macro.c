@@ -210,9 +210,9 @@ INTERNAL void define(struct macro macro)
     new_macro_added = 0;
     ref = hash_insert(&macro_hash_table, &macro);
     if (macrocmp(ref, &macro)) {
-        error("Redefinition of macro '%s' with different substitution.",
+        fatal("Redefinition of macro '%s' with different substitution.",
             str_raw(macro.name));
-        exit(1);
+        
     } else {
         ref->is__file__ = !str_cmp(builtin__file__, ref->name);
         ref->is__line__ = !str_cmp(builtin__line__, ref->name);
@@ -240,7 +240,7 @@ void print_token_array(const TokenArray *list)
         }
         t = array_get(list, i);
         if (t.token == PARAM) {
-            printf("<param %ld>", t.d.val.i);
+            printf("<param %lld>", t.d.val.i);
         } else {
             putchar('\'');
             if (t.leading_whitespace > 0) {
@@ -278,9 +278,9 @@ static struct token paste(struct token left, struct token right)
 
     right = tokenize(buf, &endptr);
     if (endptr != buf + s1.len + s2.len) {
-        error("Invalid token resulting from pasting '%s' and '%s'.",
+        fatal("Invalid token resulting from pasting '%s' and '%s'.",
             str_raw(s1), str_raw(s2));
-        exit(1);
+        
     }
 
     right.leading_whitespace = left.leading_whitespace;
@@ -366,12 +366,12 @@ static TokenArray expand_stringify_and_paste(
 
     len = array_len(&def->replacement);
     if (len && array_get(&def->replacement, 0).token == TOKEN_PASTE) {
-        error("Unexpected '##' operator at beginning of line.");
-        exit(1);
+        fatal("Unexpected '##' operator at beginning of line.");
+        
     } else if (len > 2) {
         if (array_get(&def->replacement, len - 1).token == TOKEN_PASTE) {
-            error("Unexpected '##' operator at end of line.");
-            exit(1);
+            fatal("Unexpected '##' operator at end of line.");
+            
         }
     }
 
@@ -426,8 +426,8 @@ static TokenArray expand_stringify_and_paste(
                 t = stringify(&args[d]);
                 array_push_back(&list, t);
             } else {
-                error("Stray '#' in replacement list.");
-                exit(1);
+                fatal("Stray '#' in replacement list.");
+                
             }
             break;
         default:
@@ -506,16 +506,16 @@ static TokenArray read_arg(
         || ((list->token != ',' || is_va_arg) && list->token != ')'))
     {
         if (list->token == NEWLINE) {
-            error("Unexpected end of input in expansion.");
-            exit(1);
+            fatal("Unexpected end of input in expansion.");
+            
         }
         if (list->token == '(') {
             nesting++;
         } else if (list->token == ')') {
             nesting--;
             if (nesting < 0) {
-                error("Negative nesting depth in expansion.");
-                exit(1);
+                fatal("Negative nesting depth in expansion.");
+                
             }
         }
         t = *list++;
@@ -540,8 +540,8 @@ static TokenArray *read_args(
 
     if (def->type == FUNCTION_LIKE) {
         if (list->token != '(') {
-            error("Expected '(' to begin macro argument list.");
-            exit(1);
+            fatal("Expected '(' to begin macro argument list.");
+            
         }
 
         list += 1;
@@ -556,8 +556,8 @@ static TokenArray *read_args(
                         i = -1;
                         break;
                     } else {
-                        error("Expected ',' between macro parameters.");
-                        exit(1);
+                        fatal("Expected ',' between macro parameters.");
+                        
                     }
                 } else list += 1;
             }
@@ -570,8 +570,8 @@ static TokenArray *read_args(
         }
 
         if (list->token != ')') {
-            error("Expected ')' to close macro argument list.");
-            exit(1);
+            fatal("Expected ')' to close macro argument list.");
+            
         }
 
         list += 1;
@@ -777,8 +777,8 @@ INTERNAL struct token stringify(const TokenArray *list)
                 }
             }
             if (ptr > 0 && buf[ptr - 1] == '\\') {
-                error("Invalid string literal ending with '\\'.");
-                exit(1);
+                fatal("Invalid string literal ending with '\\'.");
+                
             }
             str.leading_whitespace = array_get(list, 0).leading_whitespace;
             str.d.string = str_register(buf, ptr);
